@@ -1,0 +1,30 @@
+{
+    "version": 1,
+    "author": "JackMacWindows",
+    "editor": "wokwi",
+    "parts": [
+        {
+            "id": "esp",
+            "type": "board-esp32-s3-devkitc-1",
+            "left": 100,
+            "top": 100,
+            "attrs": { "builder": "esp-idf", "flashSize": "32", "psramSize": "8" }
+        },
+        {
+            "id": "led_clk",
+            "type": "wokwi-led",
+            "left": 200,
+            "top": 150,
+            "attrs": {}
+        }
+    ],
+    "connections": [
+        [ "esp:TX", "$serialMonitor:RX", "", [] ],
+        [ "esp:RX", "$serialMonitor:TX", "", [] ],
+        [ "esp:35", "led_clk:C", "red", [] ],
+        [ "esp:GND.2", "led_clk:A", "black", [] ]
+    ],
+    "serialMonitor": {
+        "display": "always"
+    }
+}

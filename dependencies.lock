@@ -5,47 +5,29 @@ dependencies:
       service_url: https://api.components.espressif.com/
       type: service
     version: 0.5.3
+  espressif/pwm_audio:
+    component_hash: 48a27530549e0c3d69a88f2a8a981feaf908ea1c033e43deb8f1a2ad941a6dd1
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.1.1
   espressif/usb_host_hid:
     component_hash: dc91eb27f0fe87977f98acb1ca491306a2924cbf16186c16bd41d7414644b8f9
     source:
       service_url: https://api.components.espressif.com/
       type: service
     version: 1.0.1~1
-  espressif__esp_tinyuf2:
-    component_hash: null
-    source:
-      path: /home/jack/Downloads/craftos-esp/components/espressif__esp_tinyuf2
-      type: local
-    version: 0.2.0
   idf:
     component_hash: null
     source:
       type: idf
     version: 5.1.2
   joltwallet/littlefs:
-    component_hash: 1d8f346fe94debb00483f76d04b6648083f2d3505da811beccdbd0bd1f6c24cd
+    component_hash: 1fe7281f5cd587fef17574becd1b553ce0df26ba38ebdc645792e1511b081e3e
     source:
       service_url: https://api.components.espressif.com/
       type: service
-    version: 1.11.0
-  leeebo/esp-inih:
-    component_hash: a2ecd9643d4cf7b3592645579d6ecf0f5c4f07f8ca8f9bafeb1d0f89fd005f38
-    source:
-      service_url: https://api.components.espressif.com/
-      type: service
-    version: 0.0.2
-  leeebo/tinyusb_src:
-    component_hash: 7fb4761ab2f7ff9f53acc78765f9b7df76b43ec20e368e976bd60296346cc780
-    source:
-      service_url: https://api.components.espressif.com/
-      type: service
-    version: 0.0.4
-  leeebo__tinyusb_src:
-    component_hash: null
-    source:
-      path: /home/jack/Downloads/craftos-esp/components/leeebo__tinyusb_src
-      type: local
-    version: 0.0.4
-manifest_hash: 3c8cc740b30dbde29840fd35e300976931b48d25cede1ae1cb568ea62b17e3f4
+    version: 1.12.0
+manifest_hash: e4fe2af6d242d96e741f5a4f8987df3b506c65f392ffc4a3190784955c742368
 target: esp32s3
 version: 1.0.0

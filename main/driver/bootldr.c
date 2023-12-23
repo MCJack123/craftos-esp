@@ -1,5 +1,5 @@
 #include <time.h>
-#include <esp_tinyuf2.h>
+//#include <esp_tinyuf2.h>
 #include <esp_system.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -8,7 +8,7 @@
 #include <freertos/task.h>
 #include "bootldr.h"
 
-static const char* TAG = "bootldr";
+static const char* const TAG = "bootldr";
 static time_t lastpress = 0;
 
 static IRAM_ATTR void bootldr_button(void*) {
@@ -34,7 +34,7 @@ esp_err_t bootldr_init(void) {
     esp_err_t err;
     nvs_handle_t nvs;
     uint8_t status;
-    ESP_LOGV(TAG, "Initializing bootldr module");
+    ESP_LOGI(TAG, "Initializing bootldr module");
     if (esp_reset_reason() == ESP_RST_SW) do {
         err = nvs_open("bootldr", NVS_READWRITE, &nvs);
         if (err != ESP_OK) {
@@ -51,13 +51,13 @@ esp_err_t bootldr_init(void) {
             nvs_commit(nvs);
             nvs_close(nvs);
             common_deinit();
-            tinyuf2_ota_config_t ota_conf = DEFAULT_TINYUF2_OTA_CONFIG();
+            /*tinyuf2_ota_config_t ota_conf = DEFAULT_TINYUF2_OTA_CONFIG();
             ota_conf.complete_cb = NULL;
             ota_conf.if_restart = true;
             tinyuf2_nvs_config_t nvs_conf = DEFAULT_TINYUF2_NVS_CONFIG();
             esp_tinyuf2_install(&ota_conf, &nvs_conf);
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            esp_tinyuf2_uninstall();
+            esp_tinyuf2_uninstall();*/
             esp_restart();
         }
     } while (false);

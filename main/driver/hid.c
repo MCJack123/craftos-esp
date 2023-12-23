@@ -1,11 +1,12 @@
 #include <esp_hidh.h>
+#include <freertos/task.h>
 #include <usb/hid_host.h>
 #include <usb/usb_host.h>
 #include "hid.h"
 #include "usb/hid_usage_keyboard.h"
 #include "usb/hid_usage_mouse.h"
 
-static const char* TAG = "hid";
+static const char* const TAG = "hid";
 
 // If your host terminal support ansi escape code, it can be use to simulate mouse cursor
 #define USE_ANSI_ESCAPE   0
@@ -316,7 +317,7 @@ void hid_host_device_event(hid_host_device_handle_t hid_device_handle,
 
 esp_err_t hid_init(void) {
     esp_err_t err;
-    ESP_LOGD(TAG, "Initializing HID module");
+    ESP_LOGI(TAG, "Initializing HID module");
     usb_host_config_t host_config;
     host_config.skip_phy_setup = false;
     host_config.intr_flags = 0;
@@ -326,7 +327,7 @@ esp_err_t hid_init(void) {
     hid_config.callback_arg = NULL;
     hid_config.core_id = tskNO_AFFINITY;
     hid_config.create_background_task = true;
-    hid_config.stack_size = 2048;
+    hid_config.stack_size = 3072;
     hid_config.task_priority = tskNO_AFFINITY;
     CHECK_CALLE(hid_host_install(&hid_config), "Could not initialize HID");
     esp_register_shutdown_handler(hid_deinit);

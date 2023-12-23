@@ -11,7 +11,7 @@
 #define SCREEN_HEIGHT (FB_UHEIGHT/18)
 #define SCREEN_SIZE (SCREEN_WIDTH*SCREEN_HEIGHT)
 
-static char timerID = 't';
+static const char timerID = 't';
 static TimerHandle_t timer;
 static SemaphoreHandle_t mutex;
 static uint8_t screen[SCREEN_SIZE];
@@ -27,14 +27,16 @@ static uint8_t palette[16] = {
 };
 
 static void terminal_task(TimerHandle_t timer) {
-    if (!xSemaphoreTake(mutex, 50 / portTICK_PERIOD_MS)) return;
+    //if (!xSemaphoreTakeFromISR(mutex, 50 / portTICK_PERIOD_MS)) return;
     memcpy(screen_buf, screen, SCREEN_SIZE);
     memcpy(colors_buf, colors, SCREEN_SIZE);
-    xSemaphoreGive(mutex);
-    for (int y = 0; y < FB_UHEIGHT; y++) {
+    BaseType_t should_yield;
+    //xSemaphoreGiveFromISR(mutex, &should_yield);
+    //if (should_yield == pdTRUE) portYIELD_FROM_ISR();
+    for (int y = 0; y < SCREEN_HEIGHT * 18; y++) {
         uint8_t* line = framebuffer[y];
-        for (int x = 0; x < FB_UWIDTH; x++) {
-            const int cp = ((y % 18) >> 1) * SCREEN_WIDTH + (x % 6);
+        for (int x = 0; x < SCREEN_WIDTH * 6; x++) {
+            const int cp = (y / 18) * SCREEN_WIDTH + (x / 6);
             const uint8_t c = screen[cp];
             line[x] = font_data[((c >> 4) * 9 + ((y % 18) >> 1)) * 96 + ((c & 0xF) * 6 + (x % 6))] ? palette[colors[cp] & 0x0F] : palette[colors[cp] >> 4];
         }
@@ -42,9 +44,12 @@ static void terminal_task(TimerHandle_t timer) {
 }
 
 void terminal_init(void) {
-    timer = xTimerCreate("terminal", 50 / portTICK_PERIOD_MS, pdTRUE, &timerID, terminal_task);
     mutex = xSemaphoreCreateMutex();
+    timer = xTimerCreate("terminal", pdMS_TO_TICKS(50), pdTRUE, &timerID, terminal_task);
+    assert(timer != NULL);
+    xTimerStart(timer, pdMS_TO_TICKS(50));
     esp_register_shutdown_handler(terminal_deinit);
+    terminal_clear(-1, 0x0F);
 }
 
 void terminal_deinit(void) {
@@ -53,8 +58,13 @@ void terminal_deinit(void) {
 
 void terminal_clear(int line, uint8_t col) {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    memset(screen, ' ', SCREEN_SIZE);
-    memset(colors, col, SCREEN_SIZE);
+    if (line < 0) {
+        memset(screen, ' ', SCREEN_SIZE);
+        memset(colors, col, SCREEN_SIZE);
+    } else {
+        memset(screen + line*SCREEN_WIDTH, ' ', SCREEN_WIDTH);
+        memset(colors + line*SCREEN_WIDTH, col, SCREEN_WIDTH);
+    }
     xSemaphoreGive(mutex);
 }
 

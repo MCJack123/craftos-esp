@@ -2,6 +2,9 @@
 #define TERMINAL_H
 #include "../common.h"
 
+#define TERM_WIDTH 53
+#define TERM_HEIGHT 23
+
 extern void terminal_init(void);
 extern void terminal_deinit(void);
 extern void terminal_clear(int line, uint8_t colors);

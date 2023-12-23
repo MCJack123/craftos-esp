@@ -1,11 +1,11 @@
 ## IDF Component Manager Manifest File
 dependencies:
   espressif/usb_host_hid: "^1.0.1~1"
-  #espressif/pwm_audio: "^1.1.1"
-  espressif/esp_tinyuf2: "^0.2.0"
+  espressif/pwm_audio: "^1.1.1"
+  #espressif/esp_tinyuf2: "^0.2.0"
   #espressif/esp_websocket_client: "^1.2.1"
   joltwallet/littlefs: "^1.11.0"
-  leeebo/tinyusb_src: "~0.0.3"
+  #leeebo/tinyusb_src: "~0.0.3"
   ## Required IDF version
   idf:
     version: ">=4.1.0"

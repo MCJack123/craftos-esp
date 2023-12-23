@@ -1,10 +1,11 @@
 #include <esp_system.h>
+#include <esp_event.h>
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <driver/gpio.h>
 #include "common.h"
 
-static const char* TAG = "common";
+static const char* const TAG = "common";
 
 esp_err_t common_init(void) {
     esp_err_t err;
@@ -18,16 +19,24 @@ esp_err_t common_init(void) {
         err = nvs_flash_init();
     }
     CHECK_CALLE(err, "Could not initialize NVS");
+    CHECK_CALLE(esp_event_loop_create_default(), "Could not create event loop");
     esp_register_shutdown_handler(common_deinit);
     return ESP_OK;
 }
 
 void common_deinit(void) {
+    esp_event_loop_delete_default();
     nvs_flash_deinit();
     gpio_uninstall_isr_service();
 }
 
 // temp
-void IRAM_ATTR key_cb(uint8_t key, bool isHeld) {}
-void IRAM_ATTR keyUp_cb(uint8_t key) {}
-void IRAM_ATTR char_cb(char c) {}
+void IRAM_ATTR key_cb(uint8_t key, bool isHeld) {
+    ESP_LOGD(TAG, "Pressed key %d\n", key);
+}
+void IRAM_ATTR keyUp_cb(uint8_t key) {
+    ESP_LOGD(TAG, "Released key %d\n", key);
+}
+void IRAM_ATTR char_cb(char c) {
+    ESP_LOGD(TAG, "Typed %c", c);
+}

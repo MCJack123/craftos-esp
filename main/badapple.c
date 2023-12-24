@@ -3,12 +3,14 @@
 #include <string.h>
 #include <esp_timer.h>
 #include <pwm_audio.h>
+#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/timers.h>
+#include "event.h"
+#include "driver/audio.h"
 #include "driver/vga.h"
 
 static const char* const TAG = "badapple";
-static uint8_t data[2048];
 static TickType_t start;
 
 static void audio_task(void*) {
@@ -19,15 +21,17 @@ static void audio_task(void*) {
         return;
     }
     fseek(fp, 44, SEEK_SET);
-    while (!feof(fp)) {
-        uint8_t* buf = data;
-        size_t written;
-        size_t sz = fread(data, 1, 2048, fp);
-        do {
-            pwm_audio_write(buf, sz, &written, portMAX_DELAY);
-            buf += written;
-            sz -= written;
-        } while (sz > 0);
+    for (int i = 0; !feof(fp); i++) {
+        if (i == 24) {
+            while (true) {
+                event_t ev;
+                event_wait(&ev);
+                if (ev.type == EVENT_TYPE_SPEAKER_AUDIO_EMPTY) break;
+            }
+        }
+        uint8_t* data = malloc(4096);
+        size_t sz = fread(data, 1, 4096, fp);
+        audio_queue(data, sz);
     }
     fclose(fp);
     vTaskDelete(NULL);
@@ -86,9 +90,9 @@ void badapple_main(void) {
     TimerHandle_t timer = xTimerCreate("badapple video", pdMS_TO_TICKS(16), true, fp, draw_frame);
     start = xTaskGetTickCount();
     xTimerStart(timer, 0);
-    xTaskCreate(audio_task, "badapple audio", 4096, NULL, 20, &audio);
+    xTaskCreate(audio_task, "badapple audio", 4096, NULL, 5, &audio);
     while (lastFrame < nframes) vTaskDelay(pdMS_TO_TICKS(1000));
-    xTimerStop(timer, 0);
-    vTaskDelete(audio);
+    xTimerStop(timer, portMAX_DELAY);
+    xTimerDelete(timer, portMAX_DELAY);
     fclose(fp);
 }

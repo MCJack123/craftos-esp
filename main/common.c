@@ -29,14 +29,3 @@ void common_deinit(void) {
     nvs_flash_deinit();
     gpio_uninstall_isr_service();
 }
-
-// temp
-void IRAM_ATTR key_cb(uint8_t key, bool isHeld) {
-    ESP_LOGD(TAG, "Pressed key %d\n", key);
-}
-void IRAM_ATTR keyUp_cb(uint8_t key) {
-    ESP_LOGD(TAG, "Released key %d\n", key);
-}
-void IRAM_ATTR char_cb(char c) {
-    ESP_LOGD(TAG, "Typed %c", c);
-}

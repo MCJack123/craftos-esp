@@ -8,6 +8,7 @@
 #include <diskio_sdmmc.h>
 #include <sdmmc_cmd.h>
 #include <driver/sdmmc_host.h>
+#include "../event.h"
 #include "storage.h"
 
 static const char * TAG = "storage";
@@ -22,7 +23,7 @@ static esp_err_t scan_mounts(void) {
     host_config.slot = SDMMC_HOST_SLOT_0;
     host_config.flags = SDMMC_HOST_FLAG_4BIT | SDMMC_HOST_FLAG_DDR;
     host_config.command_timeout_ms = 50;
-    host_config.max_freq_khz = SDMMC_FREQ_DEFAULT;
+    host_config.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
         .max_files = 128,
@@ -38,6 +39,9 @@ static esp_err_t scan_mounts(void) {
 
     sdmmc_card_print_info(stdout, card);
 
+    event_t event;
+    event.type = EVENT_TYPE_DISK;
+    event_push(&event);
     diskMounted = true;
     return ESP_OK;
 }
@@ -64,9 +68,14 @@ static void mount_event(void* event_handler_arg, esp_event_base_t event_base, in
     switch (event_id) {
         case SD_EVENT_MOUNT: scan_mounts(); return;
         case SD_EVENT_UNMOUNT:
-            ESP_LOGI(TAG, "Unmounting SD card");
-            if (diskMounted) esp_vfs_fat_sdcard_unmount("/disk", card);
-            diskMounted = false;
+            if (diskMounted) {
+                ESP_LOGI(TAG, "Unmounting SD card");
+                esp_vfs_fat_sdcard_unmount("/disk", card);
+                event_t event;
+                event.type = EVENT_TYPE_DISK_EJECT;
+                event_push(&event);
+                diskMounted = false;
+            }
             return;
     }
 }

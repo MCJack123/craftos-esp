@@ -1,10 +1,12 @@
 #include <esp_hidh.h>
+#include <driver/gpio.h>
 #include <freertos/task.h>
 #include <usb/hid_host.h>
+#include <usb/hid_usage_mouse.h>
+#include <usb/hid_usage_keyboard.h>
 #include <usb/usb_host.h>
+#include "../event.h"
 #include "hid.h"
-#include "usb/hid_usage_keyboard.h"
-#include "usb/hid_usage_mouse.h"
 
 static const char* const TAG = "hid";
 
@@ -12,6 +14,12 @@ static const char* const TAG = "hid";
 #define USE_ANSI_ESCAPE   0
 
 #define MAX_REPORT  4
+
+typedef struct {
+    hid_host_device_handle_t handle;
+    hid_host_driver_event_t event;
+    void *arg;
+} hid_event_t;
 
 static const char keycode2ascii[128][2] =  {
     {0     , 0      }, /* 0x00 */
@@ -54,10 +62,10 @@ static const char keycode2ascii[128][2] =  {
     {'8'   , '*'    }, /* 0x25 */
     {'9'   , '('    }, /* 0x26 */
     {'0'   , ')'    }, /* 0x27 */
-    {'\r'  , '\r'   }, /* 0x28 */
-    {'\x1b', '\x1b' }, /* 0x29 */
-    {'\b'  , '\b'   }, /* 0x2a */
-    {'\t'  , '\t'   }, /* 0x2b */
+    {0     , 0      }, /* 0x28 */
+    {0     , 0      }, /* 0x29 */
+    {0     , 0      }, /* 0x2a */
+    {0     , 0      }, /* 0x2b */
     {' '   , ' '    }, /* 0x2c */
     {'-'   , '_'    }, /* 0x2d */
     {'='   , '+'    }, /* 0x2e */
@@ -104,7 +112,7 @@ static const char keycode2ascii[128][2] =  {
     {'*'   , '*'    }, /* 0x55 */
     {'-'   , '-'    }, /* 0x56 */
     {'+'   , '+'    }, /* 0x57 */
-    {'\r'  , '\r'   }, /* 0x58 */
+    {0     , 0      }, /* 0x58 */
     {'1'   , 0      }, /* 0x59 */
     {'2'   , 0      }, /* 0x5a */
     {'3'   , 0      }, /* 0x5b */
@@ -165,10 +173,29 @@ static const char *hid_proto_name_str[] = {
 
 static uint32_t keypress_time[256] = {0};
 static hid_keyboard_input_report_boot_t prev_report = {.modifier.val = 0, .reserved = 0, .key = {0}};
+static QueueHandle_t hid_event_queue;
 
-extern IRAM_ATTR void key_cb(uint8_t key, bool isHeld);
-extern IRAM_ATTR void keyUp_cb(uint8_t key);
-extern IRAM_ATTR void char_cb(char c);
+static IRAM_ATTR void key_cb(uint8_t key, bool isHeld) {
+    event_t event;
+    event.type = EVENT_TYPE_KEY;
+    event.key.keycode = key;
+    event.key.repeat = isHeld;
+    event_push(&event);
+}
+
+static IRAM_ATTR void keyUp_cb(uint8_t key) {
+    event_t event;
+    event.type = EVENT_TYPE_KEY_UP;
+    event.key.keycode = key;
+    event_push(&event);
+}
+
+static IRAM_ATTR void char_cb(char c) {
+    event_t event;
+    event.type = EVENT_TYPE_CHAR;
+    event.character.c = c;
+    event_push(&event);
+}
 
 // look up new key in previous keys
 static inline bool find_key_in_report(hid_keyboard_input_report_boot_t const *report, uint8_t keycode) {
@@ -190,9 +217,11 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
             if (keypress_time[key]) {
                 if (esp_log_timestamp() - keypress_time[key] > 1000) {
                     key_cb(cc_keymap[key], true);
+                    if (keycode2ascii[key][0])
+                        char_cb(keycode2ascii[key][(report->modifier.val & (HID_LEFT_SHIFT | HID_RIGHT_SHIFT)) ? 1 : 0]);
                 }
             } else {
-                key_cb(key, false);
+                key_cb(cc_keymap[key], false);
                 if (keycode2ascii[key][0])
                     char_cb(keycode2ascii[key][(report->modifier.val & (HID_LEFT_SHIFT | HID_RIGHT_SHIFT)) ? 1 : 0]);
                 keypress_time[key] = esp_log_timestamp();
@@ -311,30 +340,114 @@ void hid_host_device_event(hid_host_device_handle_t hid_device_handle,
         ESP_ERROR_CHECK(hid_host_device_start(hid_device_handle));
         break;
     default:
+        ESP_LOGD(TAG, "Unknown HID event %d received", event);
         break;
+    }
+}
+
+/**
+ * @brief HID Host Device callback
+ *
+ * Puts new HID Device event to the queue
+ *
+ * @param[in] hid_device_handle HID Device handle
+ * @param[in] event             HID Device event
+ * @param[in] arg               Not used
+ */
+void hid_host_device_callback(hid_host_device_handle_t hid_device_handle,
+                              const hid_host_driver_event_t event,
+                              void *arg)
+{
+    const hid_event_t evt_queue = {
+        // HID Host Device related info
+        .handle = hid_device_handle,
+        .event = event,
+        .arg = arg
+    };
+
+    if (hid_event_queue) {
+        xQueueSend(hid_event_queue, &evt_queue, 0);
+    }
+}
+
+/**
+ * @brief Start USB Host install and handle common USB host library events while app pin not low
+ *
+ * @param[in] arg  Not used
+ */
+static void usb_lib_task(void *arg)
+{
+    const usb_host_config_t host_config = {
+        .skip_phy_setup = false,
+        .intr_flags = 0,
+    };
+
+    ESP_ERROR_CHECK(usb_host_install(&host_config));
+    xTaskNotifyGive(arg);
+
+    while (true) {
+        uint32_t event_flags;
+        usb_host_lib_handle_events(portMAX_DELAY, &event_flags);
+        // In this example, there is only one client registered
+        // So, once we deregister the client, this call must succeed with ESP_OK
+        if (event_flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+            ESP_ERROR_CHECK(usb_host_device_free_all());
+            break;
+        }
+    }
+
+    ESP_LOGI(TAG, "USB shutdown");
+    // Clean up USB Host
+    vTaskDelay(10); // Short delay to allow clients clean-up
+    ESP_ERROR_CHECK(usb_host_uninstall());
+    vTaskDelete(NULL);
+}
+
+static void hid_lib_task(void* arg) {
+    while (true) {
+        hid_event_t event;
+        xQueueReceive(hid_event_queue, &event, portMAX_DELAY);
+        hid_host_device_event(event.handle, event.event, event.arg);
     }
 }
 
 esp_err_t hid_init(void) {
     esp_err_t err;
     ESP_LOGI(TAG, "Initializing HID module");
-    usb_host_config_t host_config;
-    host_config.skip_phy_setup = false;
-    host_config.intr_flags = 0;
-    CHECK_CALLE(usb_host_install(&host_config), "Could not initialize USB");
+    /*
+    * Create usb_lib_task to:
+    * - initialize USB Host library
+    * - Handle USB Host events while APP pin in in HIGH state
+    */
+    BaseType_t task_created = xTaskCreatePinnedToCore(usb_lib_task,
+                                           "usb_events",
+                                           4096,
+                                           xTaskGetCurrentTaskHandle(),
+                                           2, NULL, 0);
+    assert(task_created == pdTRUE);
+
+    // Wait for notification from usb_lib_task to proceed
+    ulTaskNotifyTake(false, 1000);
+    hid_event_queue = xQueueCreate(64, sizeof(hid_event_t));
     hid_host_driver_config_t hid_config;
-    hid_config.callback = hid_host_device_event;
+    hid_config.callback = hid_host_device_callback;
     hid_config.callback_arg = NULL;
     hid_config.core_id = tskNO_AFFINITY;
     hid_config.create_background_task = true;
     hid_config.stack_size = 3072;
-    hid_config.task_priority = tskNO_AFFINITY;
+    hid_config.task_priority = 5;
     CHECK_CALLE(hid_host_install(&hid_config), "Could not initialize HID");
+    task_created = xTaskCreatePinnedToCore(hid_lib_task,
+                                           "hid_events",
+                                           4096,
+                                           xTaskGetCurrentTaskHandle(),
+                                           2, NULL, 0);
+    assert(task_created == pdTRUE);
     esp_register_shutdown_handler(hid_deinit);
     return ESP_OK;
 }
 
 void hid_deinit(void) {
     hid_host_uninstall();
-    usb_host_uninstall();
+    vQueueDelete(hid_event_queue);
 }

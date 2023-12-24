@@ -1,5 +1,5 @@
 #include <time.h>
-//#include <esp_tinyuf2.h>
+#include <esp_tinyuf2.h>
 #include <esp_system.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -51,13 +51,13 @@ esp_err_t bootldr_init(void) {
             nvs_commit(nvs);
             nvs_close(nvs);
             common_deinit();
-            /*tinyuf2_ota_config_t ota_conf = DEFAULT_TINYUF2_OTA_CONFIG();
+            tinyuf2_ota_config_t ota_conf = DEFAULT_TINYUF2_OTA_CONFIG();
             ota_conf.complete_cb = NULL;
             ota_conf.if_restart = true;
             tinyuf2_nvs_config_t nvs_conf = DEFAULT_TINYUF2_NVS_CONFIG();
             esp_tinyuf2_install(&ota_conf, &nvs_conf);
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            esp_tinyuf2_uninstall();*/
+            esp_tinyuf2_uninstall();
             esp_restart();
         }
     } while (false);

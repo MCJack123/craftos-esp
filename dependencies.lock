@@ -5,29 +5,53 @@ dependencies:
       service_url: https://api.components.espressif.com/
       type: service
     version: 0.5.3
-  espressif/pwm_audio:
-    component_hash: 48a27530549e0c3d69a88f2a8a981feaf908ea1c033e43deb8f1a2ad941a6dd1
+  espressif/esp_tinyuf2:
+    component_hash: db58cc342a398131d87c344cbd57c8d2d65ca8f4fb51f5fdbeab0b1735eccbe7
     source:
       service_url: https://api.components.espressif.com/
       type: service
-    version: 1.1.1
+    version: 0.2.0
+  espressif/esp_websocket_client:
+    component_hash: af69df6a85b26a1e129814ba033fd0c704cdf925b114d9bf90f885db1bb3f8a9
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.2.1
   espressif/usb_host_hid:
     component_hash: dc91eb27f0fe87977f98acb1ca491306a2924cbf16186c16bd41d7414644b8f9
     source:
       service_url: https://api.components.espressif.com/
       type: service
     version: 1.0.1~1
+  espressif__pwm_audio:
+    component_hash: null
+    source:
+      path: /home/jack/Downloads/craftos-esp/components/espressif__pwm_audio
+      type: local
+    version: 1.1.1
   idf:
     component_hash: null
     source:
       type: idf
     version: 5.1.2
   joltwallet/littlefs:
-    component_hash: 1fe7281f5cd587fef17574becd1b553ce0df26ba38ebdc645792e1511b081e3e
+    component_hash: 5aaf0f009fb225c229c79471795f35d88df35cf42113898802862fc2a84de321
     source:
       service_url: https://api.components.espressif.com/
       type: service
-    version: 1.12.0
-manifest_hash: e4fe2af6d242d96e741f5a4f8987df3b506c65f392ffc4a3190784955c742368
+    version: 1.12.1
+  leeebo/esp-inih:
+    component_hash: a2ecd9643d4cf7b3592645579d6ecf0f5c4f07f8ca8f9bafeb1d0f89fd005f38
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 0.0.2
+  leeebo/tinyusb_src:
+    component_hash: 7fb4761ab2f7ff9f53acc78765f9b7df76b43ec20e368e976bd60296346cc780
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 0.0.4
+manifest_hash: 8f239ee342433d6f441867dbcb31419eb3dab7ac57edcb78943e11ab3850bec7
 target: esp32s3
 version: 1.0.0

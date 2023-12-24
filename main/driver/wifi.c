@@ -1,4 +1,5 @@
 #include <string.h>
+#include <esp_netif_sntp.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
 #include "wifi.h"
@@ -129,6 +130,8 @@ esp_err_t wifi_connect(const char* ssid, const char* password, const char* usern
     vSemaphoreDelete(s_semph_get_ip_addrs);
     s_semph_get_ip_addrs = NULL;
     if (s_retry_num > 5) return ESP_FAIL;
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    esp_netif_sntp_init(&config);
     return ESP_OK;
 }
 

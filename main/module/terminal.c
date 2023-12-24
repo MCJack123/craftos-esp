@@ -12,12 +12,16 @@
 #define SCREEN_SIZE (SCREEN_WIDTH*SCREEN_HEIGHT)
 
 static const char timerID = 't';
-static TimerHandle_t timer;
+static const char blinkTimerID = 'b';
+static TimerHandle_t timer, blinkTimer;
 static SemaphoreHandle_t mutex;
 static uint8_t screen[SCREEN_SIZE];
 static uint8_t colors[SCREEN_SIZE];
 static uint8_t screen_buf[SCREEN_SIZE];
 static uint8_t colors_buf[SCREEN_SIZE];
+static int cursorX = 0, cursorY = 0;
+static bool cursorOn = false;
+static int8_t cursorColor = -1;
 
 static uint8_t palette[16] = {
     0xFF, 0xE3, 0xCB, 0x5F,
@@ -40,19 +44,28 @@ static void terminal_task(TimerHandle_t timer) {
             const uint8_t c = screen[cp];
             line[x] = font_data[((c >> 4) * 9 + ((y % 18) >> 1)) * 96 + ((c & 0xF) * 6 + (x % 6))] ? palette[colors[cp] & 0x0F] : palette[colors[cp] >> 4];
         }
+        if (cursorOn && y >> 1 == cursorY * 9 + 6 && cursorX >= 0 && cursorX < TERM_WIDTH) memset(line + cursorX * 6, palette[cursorColor], 6);
     }
+}
+
+static void terminal_blink_task(TimerHandle_t timer) {
+    if (cursorColor >= 0) cursorOn = !cursorOn;
 }
 
 void terminal_init(void) {
     mutex = xSemaphoreCreateMutex();
     timer = xTimerCreate("terminal", pdMS_TO_TICKS(50), pdTRUE, &timerID, terminal_task);
-    assert(timer != NULL);
     xTimerStart(timer, pdMS_TO_TICKS(50));
+    blinkTimer = xTimerCreate("terminalBlink", pdMS_TO_TICKS(400), pdTRUE, &blinkTimerID, terminal_blink_task);
+    xTimerStart(blinkTimer, 0);
     esp_register_shutdown_handler(terminal_deinit);
     terminal_clear(-1, 0x0F);
 }
 
 void terminal_deinit(void) {
+    xTimerStop(blinkTimer, portMAX_DELAY);
+    xTimerDelete(blinkTimer, portMAX_DELAY);
+    xTimerStop(timer, portMAX_DELAY);
     xTimerDelete(timer, portMAX_DELAY);
 }
 
@@ -116,4 +129,11 @@ void terminal_blit(int x, int y, uint8_t* text, uint8_t* col, int len) {
     memcpy(screen + y*SCREEN_WIDTH + x, text, len);
     memcpy(colors + y*SCREEN_WIDTH + x, col, len);
     xSemaphoreGive(mutex);
+}
+
+void terminal_cursor(int8_t color, int x, int y) {
+    cursorColor = color;
+    cursorX = x;
+    cursorY = y;
+    if (cursorColor < 0) cursorOn = false;
 }

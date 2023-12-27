@@ -32,7 +32,6 @@ esp_err_t _app_main(void) {
     CHECK_CALLE(hid_init(), "Could not initialize HID module");
     CHECK_CALLE(storage_init(), "Could not initialize storage module");
     CHECK_CALLE(vga_init(), "Could not initialize VGA module");
-    ESP_LOGD(TAG, "Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
     CHECK_CALLE(wifi_init(), "Could not initialize Wi-Fi module");
     redstone_init();
     terminal_init();
@@ -40,40 +39,7 @@ esp_err_t _app_main(void) {
     terminal_clear(-1, 0xF0);
     terminal_write_literal(0, 0, "Starting CraftOS-ESP...", 0xF4);
 
-    /*uint16_t net_count;
-    wifi_network_t* net = wifi_scan(&net_count);
-    if (net == NULL) {
-        ESP_LOGE(TAG, "Could not scan for Wi-Fi networks");
-        return 1;
-    }
-    ESP_LOGI(TAG, "Available networks:");
-    for (int i = 0; i < net_count; i++) {
-        ESP_LOGI(TAG, "SSID '%s', %d bars, %s security", net[i].ssid, net[i].bars, wifi_security_names[net[i].security]);
-    }
-
-    if (net[0].security == WIFI_AUTH_OPEN) {
-        wifi_connect(net[0].ssid, NULL, NULL);
-        esp_http_client_config_t conf = {
-            .url = "http://httpbin.org/headers",
-            .method = HTTP_METHOD_GET,
-            .is_async = false,
-            .auth_type = HTTP_AUTH_TYPE_NONE,
-            .use_global_ca_store = true,
-            .crt_bundle_attach = esp_crt_bundle_attach
-        };
-        esp_http_client_handle_t handle = esp_http_client_init(&conf);
-        esp_http_client_set_header(handle, "User-Agent", "CraftOS-ESP/0.0.1");
-        esp_http_client_open(handle, 0);
-        esp_http_client_fetch_headers(handle);
-        size_t size = esp_http_client_read_response(handle, buf, 1024);
-        ESP_LOGD(TAG, "Transferred %d bytes", size);
-        buf[size] = 0;
-        esp_http_client_close(handle);
-        esp_http_client_cleanup(handle);
-        printf("%s\n", buf);
-    }*/
-
-    xTimerCreate("memory", pdMS_TO_TICKS(30000), true, &memory_timer, memory_timer);
+    xTimerStart(xTimerCreate("memory", pdMS_TO_TICKS(30000), true, &memory_timer, memory_timer), portMAX_DELAY);
 
     ESP_LOGI(TAG, "Finished startup.");
 

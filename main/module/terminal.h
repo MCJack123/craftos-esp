@@ -6,6 +6,9 @@
 #define TERM_HEIGHT 22
 #define NO_CURSOR -1
 
+extern const uint8_t defaultPalette[16];
+extern uint8_t palette[16];
+
 extern void terminal_init(void);
 extern void terminal_deinit(void);
 extern void terminal_clear(int line, uint8_t colors);

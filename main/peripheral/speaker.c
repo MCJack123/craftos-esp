@@ -15,7 +15,7 @@ static int speaker_playAudio(lua_State *L) {
     if (nsamples == 0 || nsamples > 131072) {
         luaL_error(L, "Too many samples");
     }
-    uint8_t* samples = malloc(nsamples);
+    uint8_t* samples = heap_caps_malloc(nsamples, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     for (int i = 0; i < nsamples; i++) {
         lua_rawgeti(L, 1, i+1);
         int n;

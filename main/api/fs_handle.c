@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <esp_heap_caps.h>
 #include "fs_handle.h"
 
 int fs_handle_close(lua_State *L) {
@@ -21,7 +22,7 @@ int fs_handle_readAll(lua_State *L) {
     const long pos = ftell(fp);
     fseek(fp, 0, SEEK_END);
     const long size = ftell(fp) - pos;
-    char * retval = malloc(size + 1);
+    char * retval = heap_caps_malloc(size + 1, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     memset(retval, 0, size + 1);
     fseek(fp, pos, SEEK_SET);
     int i;
@@ -33,7 +34,7 @@ int fs_handle_readAll(lua_State *L) {
         else retval[i] = (char)c;
     }
     lua_pushlstring(L, retval, i);
-    free(retval);
+    heap_caps_free(retval);
     return 1;
 }
 
@@ -41,22 +42,22 @@ int fs_handle_readLine(lua_State *L) {
     FILE * fp = *(FILE**)lua_touserdata(L, lua_upvalueindex(1));
     if (fp == NULL) luaL_error(L, "attempt to use a closed file");
     if (feof(fp) || ferror(fp)) return 0;
-    char* retval = (char*)malloc(256);
+    char* retval = (char*)heap_caps_malloc(256, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     retval[0] = 0;
     for (unsigned i = 0; 1; i += 255) {
         if (fgets(&retval[i], 256, fp) == NULL || feof(fp)) break;
         int found = 0;
         for (unsigned j = 0; j < 256; j++) if (retval[i+j] == '\n') {found = 1; break;}
         if (found) break;
-        char * retvaln = (char*)realloc(retval, i + 511);
+        char * retvaln = (char*)heap_caps_realloc(retval, i + 511, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
         if (retvaln == NULL) {
-            free(retval);
+            heap_caps_free(retval);
             return luaL_error(L, "failed to allocate memory");
         }
         retval = retvaln;
     }
     size_t len = strlen(retval) - (strlen(retval) > 0 && retval[strlen(retval)-1] == '\n' && !lua_toboolean(L, 1));
-    if (len == 0 && feof(fp)) {free(retval); return 0;}
+    if (len == 0 && feof(fp)) {heap_caps_free(retval); return 0;}
     if (len > 0 && retval[len-1] == '\r') retval[--len] = '\0';
     lua_pushlstring(L, retval, len);
     free(retval);
@@ -67,7 +68,7 @@ int fs_handle_readChar(lua_State *L) {
     FILE * fp = *(FILE**)lua_touserdata(L, lua_upvalueindex(1));
     if (fp == NULL) luaL_error(L, "attempt to use a closed file");
     if (feof(fp)) return 0;
-    char * retval = malloc(lua_isnumber(L, 1) ? lua_tointeger(L, 1) : 1);
+    char * retval = heap_caps_malloc(lua_isnumber(L, 1) ? lua_tointeger(L, 1) : 1, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     char * cur = retval;
     for (int i = 0; i < (lua_isnumber(L, 1) ? lua_tointeger(L, 1) : 1) && !feof(fp); i++) {
         uint32_t codepoint;
@@ -105,7 +106,7 @@ int fs_handle_readChar(lua_State *L) {
         }
     }
     lua_pushlstring(L, retval, cur - retval);
-    free(retval);
+    heap_caps_free(retval);
     return 1;
 }
 
@@ -122,11 +123,11 @@ int fs_handle_readByte(lua_State *L) {
             lua_pushstring(L, "");
             return 1;
         }
-        char* retval = malloc(s);
+        char* retval = heap_caps_malloc(s, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
         const size_t actual = fread(retval, 1, s, fp);
         if (actual == 0 && feof(fp)) {free(retval); return 0;}
         lua_pushlstring(L, retval, actual);
-        free(retval);
+        heap_caps_free(retval);
     } else {
         const int retval = fgetc(fp);
         if (retval == EOF || feof(fp)) return 0;
@@ -140,12 +141,12 @@ int fs_handle_readAllByte(lua_State *L) {
     if (fp == NULL) luaL_error(L, "attempt to use a closed file");
     if (feof(fp)) return 0;
     size_t size = 0;
-    char * str = (char*)malloc(512);
+    char * str = (char*)heap_caps_malloc(512, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     if (str == NULL) return luaL_error(L, "failed to allocate memory");
     while (!feof(fp)) {
         size += fread(&str[size], 1, 512, fp);
         if (size % 512 != 0) break;
-        char * strn = (char*)realloc(str, size + 512);
+        char * strn = (char*)heap_caps_realloc(str, size + 512, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
         if (strn == NULL) {
             free(str);
             return luaL_error(L, "failed to allocate memory");
@@ -153,7 +154,7 @@ int fs_handle_readAllByte(lua_State *L) {
         str = strn;
     }
     lua_pushlstring(L, str, size);
-    free(str);
+    heap_caps_free(str);
     return 1;
 }
 

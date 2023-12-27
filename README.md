@@ -35,6 +35,6 @@ A port of CraftOS-PC for ESP32-S3.
 ![pinout](pinout.png)
 
 ## License
-CraftOS-ESP and craftos2-lua are licensed under the MIT License.
-craftos2-rom is licensed under the Mozilla Public License and the ComputerCraft Public License.
-CraftOS-ESP contains portions of code from ESP-IDF, which is licensed under the Apache 2.0 License.
+CraftOS-ESP and craftos2-lua are licensed under the MIT License.  
+craftos2-rom is licensed under the Mozilla Public License and the ComputerCraft Public License.  
+CraftOS-ESP contains portions of code from ESP-IDF, which is licensed under the Apache 2.0 License.  

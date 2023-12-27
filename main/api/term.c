@@ -22,7 +22,7 @@ int term_write(lua_State *L) {
 }
 
 int term_scroll(lua_State *L) {
-    int scroll = lua_tointeger(L, 1);
+    int scroll = luaL_checkinteger(L, 1);
     terminal_scroll(scroll, current_colors);
     return 0;
 }
@@ -76,12 +76,12 @@ static int log2i(unsigned int n) {
 }
 
 int term_setTextColor(lua_State *L) {
-    current_colors = (current_colors & 0xF0) | ((int)log2(lua_tointeger(L, 1)) & 0x0F);
+    current_colors = (current_colors & 0xF0) | ((int)log2(luaL_checkinteger(L, 1)) & 0x0F);
     return 0;
 }
 
 int term_setBackgroundColor(lua_State *L) {
-    current_colors = (current_colors & 0x0F) | (((int)log2(lua_tointeger(L, 1)) & 0x0F) << 4);
+    current_colors = (current_colors & 0x0F) | (((int)log2(luaL_checkinteger(L, 1)) & 0x0F) << 4);
     return 0;
 }
 
@@ -109,14 +109,14 @@ int hexch(char c) {
 
 int term_blit(lua_State *L) {
     size_t len, blen, flen;
-    const char * str = lua_tolstring(L, 1, &len);
-    const char * fg = lua_tolstring(L, 2, &flen);
-    const char * bg = lua_tolstring(L, 3, &blen);
+    const char * str = luaL_checklstring(L, 1, &len);
+    const char * fg = luaL_checklstring(L, 2, &flen);
+    const char * bg = luaL_checklstring(L, 3, &blen);
     if (len != flen || flen != blen) {
         lua_pushstring(L, "Arguments must be the same length");
         lua_error(L);
     }
-    uint8_t* colors = malloc(len);
+    uint8_t* colors = heap_caps_malloc(len, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     for (int i = 0; i < len; i++) colors[i] = hexch(fg[i]) | (hexch(bg[i]) << 4);
     terminal_blit(cursorX, cursorY, (const uint8_t*)str, colors, len);
     free(colors);
@@ -126,22 +126,58 @@ int term_blit(lua_State *L) {
 }
 
 int term_getPaletteColor(lua_State *L) {
-    int color = log2(lua_tointeger(L, 1));
-    lua_pushnumber(L, 0);
-    lua_pushnumber(L, 0);
-    lua_pushnumber(L, 0);
+    int color = log2i(luaL_checkinteger(L, 1)) & 0x0F;
+    uint8_t v = palette[color];
+    lua_pushnumber(L, (v & 0x80 ? 0.5 : 0.0) + (v & 0x40 ? 0.25 : 0.0) + (v & 0x02 ? 0.25 : 0.0));
+    lua_pushnumber(L, (v & 0x20 ? 0.5 : 0.0) + (v & 0x10 ? 0.25 : 0.0) + (v & 0x02 ? 0.25 : 0.0));
+    lua_pushnumber(L, (v & 0x08 ? 0.5 : 0.0) + (v & 0x04 ? 0.25 : 0.0) + (v & 0x02 ? 0.25 : 0.0));
     return 3;
 }
 
 int term_nativePaletteColor(lua_State *L) {
-    int color = log2(lua_tointeger(L, 1));
-    lua_pushnumber(L, 0);
-    lua_pushnumber(L, 0);
-    lua_pushnumber(L, 0);
+    int color = log2i(luaL_checkinteger(L, 1)) & 0x0F;
+    uint8_t v = defaultPalette[color];
+    lua_pushnumber(L, (v & 0x80 ? 0.5 : 0.0) + (v & 0x40 ? 0.25 : 0.0) + (v & 0x02 ? 0.25 : 0.0));
+    lua_pushnumber(L, (v & 0x20 ? 0.5 : 0.0) + (v & 0x10 ? 0.25 : 0.0) + (v & 0x02 ? 0.25 : 0.0));
+    lua_pushnumber(L, (v & 0x08 ? 0.5 : 0.0) + (v & 0x04 ? 0.25 : 0.0) + (v & 0x02 ? 0.25 : 0.0));
     return 3;
 }
 
 int term_setPaletteColor(lua_State *L) {
+    int color = log2i(luaL_checkinteger(L, 1)) & 0x0F;
+    uint8_t rr, gg, bb;
+    if (lua_gettop(L) > 2) {
+        lua_Number r = luaL_checknumber(L, 2);
+        lua_Number g = luaL_checknumber(L, 3);
+        lua_Number b = luaL_checknumber(L, 4);
+        rr = (int)floor(r * 4 + 0.5);
+        gg = (int)floor(g * 4 + 0.5);
+        bb = (int)floor(b * 4 + 0.5);
+    } else {
+        uint32_t rgb = luaL_checkinteger(L, 2);
+        rr = (rgb >> 22) & 3;
+        gg = (rgb >> 14) & 3;
+        bb = (rgb >> 6) & 3;
+        if (rgb & 0x200000) rr++;
+        if (rgb & 0x002000) gg++;
+        if (rgb & 0x000020) bb++;
+    }
+    uint8_t i = 1;
+    if (rr && gg && bb) {rr--; gg--; bb--; i = 3;}
+    else if (rr >= 4 || gg >= 4 || bb >= 4) {
+        // conflict; both high and low range component required
+        // find whether high or low colors are used more
+        if (!rr && !gg) bb = 3;
+        else if (!gg && !bb) rr = 3;
+        else if (!bb && !rr) gg = 3;
+        else if (!rr) rr = 1;
+        else if (!gg) gg = 1;
+        else if (!bb) bb = 1;
+        // this should cover all of them?
+        if (rr && gg && bb) {rr--; gg--; bb--; i = 3;}
+    }
+    uint8_t c = ((rr & 3) << 6) | ((gg & 3) << 4) | ((bb & 3) << 2) | i;
+    palette[color] = c;
     return 0;
 }
 

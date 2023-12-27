@@ -8,6 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <esp_littlefs.h>
+#include <esp_vfs_fat.h>
 #include "fs_handle.h"
 #include "../driver/storage.h"
 
@@ -45,7 +47,7 @@ void err(lua_State *L, char * path, const char * err) {
 }
 
 char * unconst(const char * str) {
-    char * retval = malloc(strlen(str) + 1);
+    char * retval = heap_caps_malloc(strlen(str) + 1, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     strcpy(retval, str);
     return retval;
 }
@@ -144,7 +146,22 @@ int fs_getSize(lua_State *L) {
 }
 
 int fs_getFreeSpace(lua_State *L) {
-    lua_pushinteger(L, 1000000);
+    char * path = fixpath(lua_tostring(L, 1));
+    size_t cap, used;
+    if (strncmp(path, "/rom", 4) == 0) cap = 0, used = 0;
+    else if (strncmp(path, "/disk", 5) == 0) esp_vfs_fat_info("/disk", &cap, &used);
+    else esp_littlefs_info("data", &cap, &used);
+    lua_pushinteger(L, used);
+    return 1;
+}
+
+int fs_getCapacity(lua_State *L) {
+    char * path = fixpath(lua_tostring(L, 1));
+    size_t cap, used;
+    if (strncmp(path, "/rom", 4) == 0) cap = 0, used = 0;
+    else if (strncmp(path, "/disk", 5) == 0) esp_vfs_fat_info("/disk", &cap, &used);
+    else esp_littlefs_info("data", &cap, &used);
+    lua_pushinteger(L, cap);
     return 1;
 }
 
@@ -222,12 +239,12 @@ int aux_delete(const char* path) {
         d = opendir(path);
         if (d) {
             for (i = 1; (dir = readdir(d)) != NULL; i++) {
-                char* p = malloc(strlen(path) + strlen(dir->d_name) + 2);
+                char* p = heap_caps_malloc(strlen(path) + strlen(dir->d_name) + 2, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
                 strcpy(p, path);
                 strcat(p, "/");
                 strcat(p, dir->d_name);
                 ok = aux_delete(p) || ok;
-                free(p);
+                heap_caps_free(p);
             }
             closedir(d);
             rmdir(path);
@@ -252,7 +269,7 @@ int fs_combine(lua_State *L) {
             return 0;
         }
         const char * str = lua_tostring(L, i);
-        char* ns = malloc(strlen(basePath)+strlen(str)+3);
+        char* ns = heap_caps_malloc(strlen(basePath)+strlen(str)+3, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
         strcpy(ns, basePath);
         if (basePath[strlen(basePath)-1] == '/' && str[0] == '/') strcat(ns, str + 1);
         else {

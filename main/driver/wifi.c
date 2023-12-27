@@ -118,13 +118,13 @@ wifi_network_t* wifi_scan(uint16_t* len_out) {
         return NULL;
     }
     esp_wifi_scan_get_ap_num(len_out);
-    wifi_ap_record_t* records = malloc(*len_out * sizeof(wifi_ap_record_t));
+    wifi_ap_record_t* records = heap_caps_malloc(*len_out * sizeof(wifi_ap_record_t), MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     if ((err = esp_wifi_scan_get_ap_records(len_out, records)) != ESP_OK) {
         ESP_LOGE(TAG, "Could not scan Wi-Fi networks: %s (%d)", esp_err_to_name(err), err);
         free(records);
         return NULL;
     }
-    wifi_network_t* buf = malloc(*len_out * sizeof(wifi_network_t));
+    wifi_network_t* buf = heap_caps_malloc(*len_out * sizeof(wifi_network_t), MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     for (uint16_t i = 0; i < *len_out; i++) {
         strcpy(buf[i].ssid, (char*)records[i].ssid);
         buf[i].bars = (records[i].rssi + 90) / 10;

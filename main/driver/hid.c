@@ -1,6 +1,9 @@
+#include <string.h>
 #include <esp_hidh.h>
 #include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/timers.h>
 #include <usb/hid_host.h>
 #include <usb/hid_usage_mouse.h>
 #include <usb/hid_usage_keyboard.h>
@@ -174,6 +177,7 @@ static const char *hid_proto_name_str[] = {
 
 static uint32_t keypress_time[256] = {0};
 static hid_keyboard_input_report_boot_t prev_report = {.modifier.val = 0, .reserved = 0, .key = {0}};
+static bool shift_held = false, ctrl_held = false, caps_lock = false;
 
 static IRAM_ATTR void key_cb(uint8_t key, bool isHeld) {
     event_t event;
@@ -197,6 +201,28 @@ static IRAM_ATTR void char_cb(char c) {
     event_push(&event);
 }
 
+static void repeat_timer(TimerHandle_t timer) {
+    uint32_t t = esp_log_timestamp();
+    if (ctrl_held) {
+        if (keypress_time[0x15] && t - keypress_time[0x15] > 600) {
+            esp_restart();
+        }
+        if (keypress_time[0x17] && t - keypress_time[0x17] > 600) {
+            event_t event;
+            event.type = EVENT_TYPE_TERMINATE;
+            event_push(&event);
+            keypress_time[0x17] = 0;
+        }
+    }
+    for (int key = 0; key < 256; key++) {
+        if (keypress_time[key] && cc_keymap[key] && t - keypress_time[key] > 600) {
+            key_cb(cc_keymap[key], true);
+            if (keycode2ascii[key][0])
+                char_cb(keycode2ascii[key][(shift_held != caps_lock) ? 1 : 0]);
+        }
+    }
+}
+
 // look up new key in previous keys
 static inline bool find_key_in_report(hid_keyboard_input_report_boot_t const *report, uint8_t keycode) {
     for (uint8_t i=0; i<6; i++) {
@@ -206,26 +232,25 @@ static inline bool find_key_in_report(hid_keyboard_input_report_boot_t const *re
     return false;
 }
 
-static void hid_host_keyboard_report_callback(const uint8_t *const data, const int length) {
+static void hid_host_keyboard_report_callback(hid_host_device_handle_t hid_device_handle, const uint8_t *const data, const int length) {
     hid_keyboard_input_report_boot_t *report = (hid_keyboard_input_report_boot_t *)data;
 
     if (length < sizeof(hid_keyboard_input_report_boot_t)) return;
 
     for (uint8_t i = 0; i < 6; i++) {
         uint8_t key = report->key[i];
-        if (key) {
-            if (keypress_time[key]) {
-                if (esp_log_timestamp() - keypress_time[key] > 1000) {
-                    key_cb(cc_keymap[key], true);
-                    if (keycode2ascii[key][0])
-                        char_cb(keycode2ascii[key][(report->modifier.val & (HID_LEFT_SHIFT | HID_RIGHT_SHIFT)) ? 1 : 0]);
-                }
-            } else {
+        if (key && !keypress_time[key]) {
+            if (cc_keymap[key]) {
                 key_cb(cc_keymap[key], false);
                 if (keycode2ascii[key][0])
-                    char_cb(keycode2ascii[key][(report->modifier.val & (HID_LEFT_SHIFT | HID_RIGHT_SHIFT)) ? 1 : 0]);
-                keypress_time[key] = esp_log_timestamp();
+                    char_cb(keycode2ascii[key][((report->modifier.val & (HID_LEFT_SHIFT | HID_RIGHT_SHIFT)) != caps_lock) ? 1 : 0]);
             }
+            if (key == 0x39) { // caps lock
+                caps_lock = !caps_lock;
+                uint8_t rp = caps_lock ? 2 : 0;
+                hid_class_request_set_report(hid_device_handle, HID_REPORT_TYPE_OUTPUT, HID_REPORT_TYPE_OUTPUT, &rp, 1);
+            }
+            keypress_time[key] = esp_log_timestamp();
         }
     }
 
@@ -236,11 +261,13 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
             else keyUp_cb(cc_modifiers[i]);
         }
     }
+    shift_held = report->modifier.left_shift || report->modifier.right_shift;
+    ctrl_held = report->modifier.left_ctr || report->modifier.rigth_ctr;
 
     for (uint8_t i = 0; i < 6; i++) {
         uint8_t key = prev_report.key[i];
         if (key && !find_key_in_report(report, key)) {
-            keyUp_cb(cc_keymap[key]);
+            if (cc_keymap[key]) keyUp_cb(cc_keymap[key]);
             keypress_time[key] = 0;
         }
     }
@@ -281,7 +308,7 @@ void hid_host_interface_callback(hid_host_device_handle_t hid_device_handle,
 
         if (HID_SUBCLASS_BOOT_INTERFACE == dev_params.sub_class) {
             if (HID_PROTOCOL_KEYBOARD == dev_params.proto) {
-                hid_host_keyboard_report_callback(data, data_length);
+                hid_host_keyboard_report_callback(hid_device_handle, data, data_length);
             } else if (HID_PROTOCOL_MOUSE == dev_params.proto) {
                 hid_host_mouse_report_callback(data, data_length);
             }
@@ -409,6 +436,7 @@ static void hid_lib_task(void *arg, esp_event_base_t event_base, int32_t event_i
 esp_err_t hid_init(void) {
     esp_err_t err;
     ESP_LOGI(TAG, "Initializing HID module");
+    memset(keypress_time, 0, sizeof(keypress_time));
     /*
     * Create usb_lib_task to:
     * - initialize USB Host library
@@ -416,7 +444,7 @@ esp_err_t hid_init(void) {
     */
     BaseType_t task_created = xTaskCreatePinnedToCore(usb_lib_task,
                                            "usb_events",
-                                           4096,
+                                           2048,
                                            xTaskGetCurrentTaskHandle(),
                                            2, NULL, 0);
     assert(task_created == pdTRUE);
@@ -428,11 +456,11 @@ esp_err_t hid_init(void) {
     hid_config.callback_arg = NULL;
     hid_config.core_id = tskNO_AFFINITY;
     hid_config.create_background_task = true;
-    hid_config.stack_size = 3072;
+    hid_config.stack_size = 2048;
     hid_config.task_priority = 5;
     CHECK_CALLE(hid_host_install(&hid_config), "Could not initialize HID");
     esp_event_handler_register(HID_EVENT, 0, hid_lib_task, NULL);
-    assert(task_created == pdTRUE);
+    xTimerStart(xTimerCreate("key repeat", pdMS_TO_TICKS(40), true, &repeat_timer, repeat_timer), portMAX_DELAY);
     esp_register_shutdown_handler(hid_deinit);
     return ESP_OK;
 }

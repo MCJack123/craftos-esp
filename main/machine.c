@@ -96,8 +96,10 @@ static int getNextEvent(lua_State *L, const char * filter) {
                     }
                     break;
                 case EVENT_TYPE_HTTP_FAILURE: case EVENT_TYPE_HTTP_SUCCESS: case EVENT_TYPE_HTTP_CHECK:
+                case EVENT_TYPE_WEBSOCKET_CLOSED: case EVENT_TYPE_WEBSOCKET_FAILURE:
+                case EVENT_TYPE_WEBSOCKET_MESSAGE: case EVENT_TYPE_WEBSOCKET_SUCCESS:
                     lua_pushstring(event, ev.http.url);
-                    free(ev.http.url);
+                    if (ev.type < EVENT_TYPE_WEBSOCKET_MESSAGE) free(ev.http.url);
                     if (ev.http.err) lua_pushstring(event, ev.http.err);
                     if (ev.http.handle_fn) ev.http.handle_fn(event, ev.http.handle_arg);
                     break;

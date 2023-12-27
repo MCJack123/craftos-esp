@@ -30,7 +30,7 @@ int os_setComputerLabel(lua_State *L) {
     if (label) free(label);
     size_t sz;
     const char * lbl = luaL_checklstring(L, 1, &sz);
-    label = malloc(sz + 1);
+    label = heap_caps_malloc(sz + 1, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
     strcpy(label, lbl);
     nvs_handle_t handle;
     nvs_open("config", NVS_READWRITE, &handle);
@@ -87,7 +87,7 @@ int os_startTimer(lua_State *L) {
     } else {
         TimerHandle_t handle = xTimerCreate("timer", ticks, pdFALSE, (ptrdiff_t)id, timer);
         xTimerStart(handle, portMAX_DELAY);
-        timer_ll_t* tm = malloc(sizeof(timer_ll_t));
+        timer_ll_t* tm = heap_caps_malloc(sizeof(timer_ll_t), MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
         tm->id = id;
         tm->timer = handle;
         tm->next = NULL;
@@ -201,7 +201,9 @@ int os_reboot(lua_State *L) {
 
 const luaL_Reg os_lib[] = {
     {"getComputerID", os_getComputerID},
+    {"computerID", os_getComputerID},
     {"getComputerLabel", os_getComputerLabel},
+    {"computerLabel", os_getComputerLabel},
     {"setComputerLabel", os_setComputerLabel},
     {"queueEvent", os_queueEvent},
     {"clock", os_clock},

@@ -617,7 +617,7 @@ void vga_deinit(void) {
         }
     }
     // Wait for the transfer to end
-    spi_device_polling_end(spi_device, 1000 / portTICK_PERIOD_MS);
+    spi_device_polling_end(spi_device, portMAX_DELAY);
     spi_bus_remove_device(spi_device);
     spi_bus_free(SPI2_HOST);
 }

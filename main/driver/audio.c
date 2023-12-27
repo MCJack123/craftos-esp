@@ -23,7 +23,9 @@ static void audio_task(void*) {
             xQueueReceive(audioQueue, &audio, portMAX_DELAY);
             start = esp_timer_get_time();
         }
+        ESP_EARLY_LOGD(TAG, "got audio chunk of length %u", audio.sz);
         if (xQueuePeek(audioQueue, &next, 0) == pdFALSE) {
+            ESP_EARLY_LOGD(TAG, "queue empty, queueing event");
             event_t event;
             event.type = EVENT_TYPE_SPEAKER_AUDIO_EMPTY;
             event_push(&event);
@@ -52,7 +54,7 @@ esp_err_t audio_init(void) {
     conf.gpio_num_left = GPIO_NUM_21;
     conf.ledc_channel_left = LEDC_CHANNEL_7;
     conf.ledc_timer_sel = LEDC_TIMER_0;
-    conf.ringbuf_len = 24000;
+    conf.ringbuf_len = 4800;
     conf.gpio_num_right = -1;
     conf.ledc_channel_right = -1;
     CHECK_CALLE(pwm_audio_init(&conf), "Could not initialize audio");
@@ -61,7 +63,7 @@ esp_err_t audio_init(void) {
     gpio_set_drive_capability(GPIO_NUM_21, GPIO_DRIVE_CAP_3);
     audioQueue = xQueueCreate(32, sizeof(struct audio_queue));
     if (!audioQueue) return ESP_ERR_NO_MEM;
-    if (xTaskCreate(audio_task, "audio", 2048, NULL, 15, &audioTask) != pdTRUE) return ESP_ERR_NO_MEM;
+    if (xTaskCreatePinnedToCore(audio_task, "audio", 2048, NULL, 15, &audioTask, 0) != pdTRUE) return ESP_ERR_NO_MEM;
     esp_register_shutdown_handler(audio_deinit);
     return ESP_OK;
 }

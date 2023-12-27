@@ -3,6 +3,7 @@
 #include <esp_system.h>
 #include <esp_wifi.h>
 #include "wifi.h"
+#include "../event.h"
 
 const char* const wifi_security_names[] = {
     "Open",
@@ -32,6 +33,9 @@ static void on_wifi_disconnect(void *arg, esp_event_base_t event_base,
         if (s_semph_get_ip_addrs) {
             xSemaphoreGive(s_semph_get_ip_addrs);
         }
+        event_t event;
+        event.type = EVENT_TYPE_WIFI_DISCONNECT;
+        event_push(&event);
         return;
     }
     ESP_LOGI(TAG, "Wi-Fi disconnected, trying to reconnect...");
@@ -45,7 +49,9 @@ static void on_wifi_disconnect(void *arg, esp_event_base_t event_base,
 static void on_wifi_connect(void *esp_netif, esp_event_base_t event_base,
                             int32_t event_id, void *event_data)
 {
-
+    event_t event;
+    event.type = EVENT_TYPE_WIFI_CONNECT;
+    event_push(&event);
 }
 
 static void on_sta_got_ip(void *arg, esp_event_base_t event_base,
@@ -59,6 +65,8 @@ static void on_sta_got_ip(void *arg, esp_event_base_t event_base,
     } else {
         ESP_LOGI(TAG, "- IPv4 address: " IPSTR ",", IP2STR(&event->ip_info.ip));
     }
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    esp_netif_sntp_init(&config);
 }
 
 esp_err_t wifi_init(void) {
@@ -74,6 +82,10 @@ esp_err_t wifi_init(void) {
     netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
     CHECK_CALLE(esp_wifi_set_default_wifi_sta_handlers(), "Failed to set default Wi-Fi STA handlers");
     CHECK_CALLE(esp_wifi_start(), "Failed to start Wi-Fi");
+    CHECK_CALLE(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_wifi_disconnect, NULL), "Could not set event handler");
+    CHECK_CALLE(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &on_sta_got_ip, NULL), "Could not set event handler");
+    CHECK_CALLE(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &on_wifi_connect, netif), "Could not set event handler");
+    esp_wifi_connect();
     esp_register_shutdown_handler(wifi_deinit);
     return ESP_OK;
 }
@@ -81,6 +93,22 @@ esp_err_t wifi_init(void) {
 void wifi_deinit(void) {
     esp_wifi_stop();
     esp_wifi_deinit();
+}
+
+wifi_status_t wifi_status(void) {
+    wifi_status_t retval;
+    wifi_ap_record_t info;
+    if (esp_wifi_sta_get_ap_info(&info) != ESP_OK) {
+        retval.connected = false;
+        return retval;
+    }
+    retval.connected = true;
+    strncpy(retval.ssid, (char*)info.ssid, 33);
+    retval.bars = (info.rssi + 90) / 10;
+    if (retval.bars > 4) retval.bars = 4;
+    retval.security = info.authmode;
+    retval.mode = info.phy_11ax ? 'x' : (info.phy_11n ? 'n' : (info.phy_11g ? 'g' : (info.phy_11b ? 'b' : 'a')));
+    return retval;
 }
 
 wifi_network_t* wifi_scan(uint16_t* len_out) {
@@ -123,15 +151,10 @@ esp_err_t wifi_connect(const char* ssid, const char* password, const char* usern
     CHECK_CALLE(esp_wifi_set_config(WIFI_IF_STA, (wifi_config_t*)&conf), "Could not set Wi-Fi config");
     s_semph_get_ip_addrs = xSemaphoreCreateBinary();
     CHECK_CALLE(esp_wifi_connect(), "Could not connect to Wi-Fi network");
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_wifi_disconnect, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &on_sta_got_ip, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &on_wifi_connect, netif));
     xSemaphoreTake(s_semph_get_ip_addrs, portMAX_DELAY);
     vSemaphoreDelete(s_semph_get_ip_addrs);
     s_semph_get_ip_addrs = NULL;
     if (s_retry_num > 5) return ESP_FAIL;
-    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
-    esp_netif_sntp_init(&config);
     return ESP_OK;
 }
 

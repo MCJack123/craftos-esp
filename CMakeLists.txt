@@ -7,4 +7,4 @@ cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(main)
 
-#littlefs_create_partition_image(rom craftos2-rom/rom FLASH_IN_PROJECT)
+littlefs_create_partition_image(rom craftos2-rom/rom FLASH_IN_PROJECT)

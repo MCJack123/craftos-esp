@@ -1,12 +1,7 @@
 #include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <esp_chip_info.h>
-#include <esp_crt_bundle.h>
-#include <esp_flash.h>
-#include <esp_http_client.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/timers.h>
 #include "event.h"
 #include "driver/audio.h"
 #include "driver/bootldr.h"
@@ -18,9 +13,15 @@
 #include "module/terminal.h"
 
 static const char * TAG = "main";
-static char buf[1024];
 
 extern void badapple_main(void);
+extern void machine_main(void*);
+
+static void memory_timer(TimerHandle_t timer) {
+    ESP_DRAM_LOGD(TAG, "Memory info:");
+    heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
+    heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+}
 
 esp_err_t _app_main(void) {
     esp_err_t err;
@@ -31,15 +32,15 @@ esp_err_t _app_main(void) {
     CHECK_CALLE(hid_init(), "Could not initialize HID module");
     CHECK_CALLE(storage_init(), "Could not initialize storage module");
     CHECK_CALLE(vga_init(), "Could not initialize VGA module");
+    ESP_LOGD(TAG, "Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
     CHECK_CALLE(wifi_init(), "Could not initialize Wi-Fi module");
     redstone_init();
     terminal_init();
 
-    int x = 0, y = 0;
-    uint8_t colors = 0xF0;
-    terminal_clear(-1, colors);
+    terminal_clear(-1, 0xF0);
+    terminal_write_literal(0, 0, "Starting CraftOS-ESP...", 0xF4);
 
-    uint16_t net_count;
+    /*uint16_t net_count;
     wifi_network_t* net = wifi_scan(&net_count);
     if (net == NULL) {
         ESP_LOGE(TAG, "Could not scan for Wi-Fi networks");
@@ -70,55 +71,13 @@ esp_err_t _app_main(void) {
         esp_http_client_close(handle);
         esp_http_client_cleanup(handle);
         printf("%s\n", buf);
-    }
+    }*/
+
+    xTimerCreate("memory", pdMS_TO_TICKS(30000), true, &memory_timer, memory_timer);
 
     ESP_LOGI(TAG, "Finished startup.");
 
-    terminal_cursor(0, x, y);
-    while (true) {
-        event_t event;
-        event_wait(&event);
-        char space = ' ';
-        switch (event.type) {
-            case EVENT_TYPE_KEY:
-                ESP_LOGD(TAG, "Got key %d", event.key.keycode);
-                switch (event.key.keycode) {
-                    case 28:
-                        x = 0;
-                        if (++y == TERM_HEIGHT) {
-                            terminal_scroll(1, colors);
-                            y--;
-                        }
-                        terminal_cursor(0, x, y);
-                        break;
-                    case 14:
-                        if (x == 0 && y == 0) break;
-                        if (--x < 0) {
-                            y--;
-                            x = TERM_WIDTH - 1;
-                        }
-                        terminal_write(x, y, (uint8_t*)&space, 1, colors);
-                        terminal_cursor(0, x, y);
-                        break;
-                }
-                break;
-            case EVENT_TYPE_CHAR:
-                ESP_LOGD(TAG, "Got character %c (%hhd)", event.character.c, event.character.c);
-                terminal_write(x++, y, (uint8_t*)&event.character.c, 1, colors);
-                if (x == TERM_WIDTH) {
-                    x = 0;
-                    if (++y == TERM_HEIGHT) {
-                        terminal_scroll(1, colors);
-                        y--;
-                    }
-                }
-                terminal_cursor(0, x, y);
-                break;
-            default:
-                ESP_LOGD(TAG, "Got event type %lu", event.type);
-                break;
-        }
-    }
+    xTaskCreatePinnedToCore(machine_main, "CraftOS", 16384, NULL, tskIDLE_PRIORITY, NULL, 1);
 
     return 0;
 }

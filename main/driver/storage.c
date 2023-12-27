@@ -13,7 +13,7 @@
 
 static const char * TAG = "storage";
 
-static bool diskMounted = false;
+bool diskMounted = false;
 static sdmmc_slot_config_t slot_config;
 static sdmmc_card_t* card;
 
@@ -27,7 +27,7 @@ static esp_err_t scan_mounts(void) {
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
         .max_files = 128,
-        .allocation_unit_size = 16384,
+        .allocation_unit_size = 2048,
         .disk_status_check_enable = false
     };
 

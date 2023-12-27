@@ -9,6 +9,7 @@
 #include "hid.h"
 
 static const char* const TAG = "hid";
+ESP_EVENT_DEFINE_BASE(HID_EVENT);
 
 // If your host terminal support ansi escape code, it can be use to simulate mouse cursor
 #define USE_ANSI_ESCAPE   0
@@ -173,7 +174,6 @@ static const char *hid_proto_name_str[] = {
 
 static uint32_t keypress_time[256] = {0};
 static hid_keyboard_input_report_boot_t prev_report = {.modifier.val = 0, .reserved = 0, .key = {0}};
-static QueueHandle_t hid_event_queue;
 
 static IRAM_ATTR void key_cb(uint8_t key, bool isHeld) {
     event_t event;
@@ -240,7 +240,7 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
     for (uint8_t i = 0; i < 6; i++) {
         uint8_t key = prev_report.key[i];
         if (key && !find_key_in_report(report, key)) {
-            keyUp_cb(key);
+            keyUp_cb(cc_keymap[key]);
             keypress_time[key] = 0;
         }
     }
@@ -365,9 +365,7 @@ void hid_host_device_callback(hid_host_device_handle_t hid_device_handle,
         .arg = arg
     };
 
-    if (hid_event_queue) {
-        xQueueSend(hid_event_queue, &evt_queue, 0);
-    }
+    esp_event_post(HID_EVENT, 0, &evt_queue, sizeof(hid_event_t), portMAX_DELAY);
 }
 
 /**
@@ -403,12 +401,9 @@ static void usb_lib_task(void *arg)
     vTaskDelete(NULL);
 }
 
-static void hid_lib_task(void* arg) {
-    while (true) {
-        hid_event_t event;
-        xQueueReceive(hid_event_queue, &event, portMAX_DELAY);
-        hid_host_device_event(event.handle, event.event, event.arg);
-    }
+static void hid_lib_task(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+    hid_event_t* event = event_data;
+    hid_host_device_event(event->handle, event->event, event->arg);
 }
 
 esp_err_t hid_init(void) {
@@ -428,7 +423,6 @@ esp_err_t hid_init(void) {
 
     // Wait for notification from usb_lib_task to proceed
     ulTaskNotifyTake(false, 1000);
-    hid_event_queue = xQueueCreate(64, sizeof(hid_event_t));
     hid_host_driver_config_t hid_config;
     hid_config.callback = hid_host_device_callback;
     hid_config.callback_arg = NULL;
@@ -437,17 +431,13 @@ esp_err_t hid_init(void) {
     hid_config.stack_size = 3072;
     hid_config.task_priority = 5;
     CHECK_CALLE(hid_host_install(&hid_config), "Could not initialize HID");
-    task_created = xTaskCreatePinnedToCore(hid_lib_task,
-                                           "hid_events",
-                                           4096,
-                                           xTaskGetCurrentTaskHandle(),
-                                           2, NULL, 0);
+    esp_event_handler_register(HID_EVENT, 0, hid_lib_task, NULL);
     assert(task_created == pdTRUE);
     esp_register_shutdown_handler(hid_deinit);
     return ESP_OK;
 }
 
 void hid_deinit(void) {
+    esp_event_handler_unregister(HID_EVENT, 0, hid_lib_task);
     hid_host_uninstall();
-    vQueueDelete(hid_event_queue);
 }

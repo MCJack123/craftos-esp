@@ -34,11 +34,11 @@ dependencies:
     source:
       type: idf
     version: 5.1.2
-  joltwallet/littlefs:
-    component_hash: 5aaf0f009fb225c229c79471795f35d88df35cf42113898802862fc2a84de321
+  joltwallet__littlefs:
+    component_hash: null
     source:
-      service_url: https://api.components.espressif.com/
-      type: service
+      path: /home/jack/Downloads/craftos-esp/components/joltwallet__littlefs
+      type: local
     version: 1.12.1
   leeebo/esp-inih:
     component_hash: a2ecd9643d4cf7b3592645579d6ecf0f5c4f07f8ca8f9bafeb1d0f89fd005f38
@@ -52,6 +52,6 @@ dependencies:
       service_url: https://api.components.espressif.com/
       type: service
     version: 0.0.4
-manifest_hash: 8f239ee342433d6f441867dbcb31419eb3dab7ac57edcb78943e11ab3850bec7
+manifest_hash: b584b36ebe1c887a38188ff449bdd08141647eb88dc273b9a1255fa6815cc1f1
 target: esp32s3
 version: 1.0.0

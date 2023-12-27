@@ -6,6 +6,7 @@
 #include "common.h"
 
 static const char* const TAG = "common";
+esp_event_loop_handle_t common_event_loop;
 
 esp_err_t common_init(void) {
     esp_err_t err;
@@ -19,12 +20,20 @@ esp_err_t common_init(void) {
         err = nvs_flash_init();
     }
     CHECK_CALLE(err, "Could not initialize NVS");
-    CHECK_CALLE(esp_event_loop_create_default(), "Could not create event loop");
+    CHECK_CALLE(esp_event_loop_create_default(), "Could not create default event loop");
+    esp_event_loop_args_t args;
+    args.queue_size = 8;
+    args.task_name = "event_common";
+    args.task_core_id = 0;
+    args.task_priority = tskIDLE_PRIORITY;
+    args.task_stack_size = 4096;
+    CHECK_CALLE(esp_event_loop_create(&args, &common_event_loop), "Could not create common event loop");
     esp_register_shutdown_handler(common_deinit);
     return ESP_OK;
 }
 
 void common_deinit(void) {
+    esp_event_loop_delete(common_event_loop);
     esp_event_loop_delete_default();
     nvs_flash_deinit();
     gpio_uninstall_isr_service();

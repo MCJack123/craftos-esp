@@ -1,3 +1,6 @@
 [submodule "craftos2-rom"]
 	path = craftos2-rom
 	url = https://github.com/MCJack123/craftos2-rom
+[submodule "main/craftos2-lua"]
+	path = main/craftos2-lua
+	url = https://github.com/MCJack123/craftos2-lua

@@ -610,14 +610,15 @@ void vga_deinit(void) {
     // Disconnect the looping DMA transfer to cause the transfer to finish
     ESP_LOGV(TAG, "Deinitializing VGA, this may or may not work");
     spi_hal_context_t* hal = &spi_device->host->hal;
-    for (int j = 0; j < 8; j++) {
-        if (llchunks[6][j].qe.stqe_next == hal->dmadesc_tx) {
-            llchunks[6][j].eof = 1;
-            llchunks[6][j].qe.stqe_next = NULL;
+    for (int i = 0; i < 12; i++) {
+        for (int j = 0; j < 12; j++) {
+            llchunks[i][j].eof = 1;
+            llchunks[i][j].qe.stqe_next = NULL;
         }
     }
     // Wait for the transfer to end
-    spi_device_polling_end(spi_device, portMAX_DELAY);
-    spi_bus_remove_device(spi_device);
-    spi_bus_free(SPI2_HOST);
+    /*if (spi_device_polling_end(spi_device, pdMS_TO_TICKS(5000)) == ESP_OK) {
+        spi_bus_remove_device(spi_device);
+        spi_bus_free(SPI2_HOST);
+    }*/
 }

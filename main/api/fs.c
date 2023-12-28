@@ -28,13 +28,35 @@ char* dirname(char* path) {
 	return path;
 }
 
-char * fixpath(const char * path) {
-    char * retval = (char*)malloc(strlen(path) + 2);
-    if (path[0] != '/') {
-        retval[0] = '/';
-        strcpy(&retval[1], path);
-    } else strcpy(retval, path);
-    //for (int i = 0; i < strlen(retval); i++) if (retval[i] == '/') retval[i] = '\\';
+char * unconst(const char * str) {
+    char * retval = heap_caps_malloc(strlen(str) + 1, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+    strcpy(retval, str);
+    return retval;
+}
+
+static inline bool allchar(const char* str, char c) {
+    while (*str) if (*str++ != c) return false;
+    return true;
+}
+
+char* fixpath(const char* pat) {
+    char* path = unconst(pat);
+    char* retval = (char*)malloc(strlen(path) + 2);
+    retval[0] = 0;
+    for (char* tok = strtok(path, "/\\"); tok; tok = strtok(NULL, "/\\")) {
+        if (strcmp(tok, "") == 0) continue;
+        else if (strcmp(tok, "..") == 0) {
+            char* p = strrchr(retval, '/');
+            if (p) *p = '\0';
+            else strcpy(retval, "..");
+        } else if (allchar(tok, ".")) continue;
+        else {
+            strcat(retval, "/");
+            strcat(retval, tok);
+        }
+    }
+    free(path);
+    if (strcmp(retval, "") == 0) strcpy(retval, "/");
     return retval;
 }
 
@@ -44,12 +66,6 @@ void err(lua_State *L, char * path, const char * err) {
     free(path);
     lua_pushstring(L, msg);
     lua_error(L);
-}
-
-char * unconst(const char * str) {
-    char * retval = heap_caps_malloc(strlen(str) + 1, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
-    strcpy(retval, str);
-    return retval;
 }
 
 int fs_list(lua_State *L) {
@@ -186,6 +202,9 @@ int fs_move(lua_State *L) {
     char * fromPath, *toPath;
     fromPath = fixpath(lua_tostring(L, 1));
     toPath = fixpath(lua_tostring(L, 2));
+    char* dir = unconst(toPath);
+    if (strcmp(dirname(dir), "") != 0) recurse_mkdir(dir);
+    free(dir);
     if (rename(fromPath, toPath) != 0) {
         free(toPath);
         err(L, fromPath, strerror(errno));
@@ -195,34 +214,67 @@ int fs_move(lua_State *L) {
     return 0;
 }
 
-int fs_copy(lua_State *L) {
-    char * fromPath, *toPath;
+static int aux_copy(const char* fromPath, const char* toPath) {
+    static EXT_RAM_ATTR char tmp[1024];
     FILE * fromfp, *tofp;
-    char tmp[1024];
     int read;
-    fromPath = fixpath(lua_tostring(L, 1));
-    toPath = fixpath(lua_tostring(L, 2));
+    struct stat st;
+    if (stat(fromPath, &st) != 0) return -1;
+    if (S_ISDIR(st.st_mode)) {
+        struct dirent *dir;
+        int i;
+        DIR * d;
+        d = opendir(fromPath);
+        if (d) {
+            for (i = 1; (dir = readdir(d)) != NULL; i++) {
+                char* fp = heap_caps_malloc(strlen(fromPath) + strlen(dir->d_name) + 2, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+                char* tp = heap_caps_malloc(strlen(toPath) + strlen(dir->d_name) + 2, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
+                strcpy(fp, fromPath);
+                strcat(fp, "/");
+                strcat(fp, dir->d_name);
+                strcpy(tp, toPath);
+                strcat(tp, "/");
+                strcat(tp, dir->d_name);
+                int err = aux_copy(fp, tp);
+                heap_caps_free(fp);
+                heap_caps_free(tp);
+                if (err) return err;
+            }
+            closedir(d);
+        } else return -1;
+    } else {
+        char* dir = unconst(toPath);
+        if (strcmp(dirname(dir), "") != 0) recurse_mkdir(dir);
+        free(dir);
+        fromfp = fopen(fromPath, "r");
+        if (fromfp == NULL) {
+            return -1;
+        }
+        tofp = fopen(toPath, "w");
+        if (tofp == NULL) {
+            fclose(fromfp);
+            return -1;
+        }
 
-    fromfp = fopen(fromPath, "r");
-    if (fromfp == NULL) {
-        free(toPath);
-        err(L, fromPath, "Cannot read file");
-    }
-    tofp = fopen(toPath, "w");
-    if (tofp == NULL) {
-        free(fromPath);
+        while (!feof(fromfp)) {
+            read = fread(tmp, 1, 1024, fromfp);
+            fwrite(tmp, read, 1, tofp);
+            if (read < 1024) break;
+        }
+
         fclose(fromfp);
-        err(L, toPath, "Cannot write file");
+        fclose(tofp);
     }
+    return 0;
+}
 
-    while (!feof(fromfp)) {
-        read = fread(tmp, 1, 1024, fromfp);
-        fwrite(tmp, read, 1, tofp);
-        if (read < 1024) break;
+int fs_copy(lua_State *L) {
+    char* fromPath = fixpath(lua_tostring(L, 1));
+    char* toPath = fixpath(lua_tostring(L, 2));
+    if (aux_copy(fromPath, toPath)) {
+        free(toPath);
+        err(L, fromPath, "Failed to copy");
     }
-
-    fclose(fromfp);
-    fclose(tofp);
     free(fromPath);
     free(toPath);
     return 0;
@@ -261,7 +313,7 @@ int fs_delete(lua_State *L) {
 }
 
 int fs_combine(lua_State *L) {
-    char * basePath = fixpath(luaL_checkstring(L, 1));
+    char * basePath = unconst(luaL_checkstring(L, 1));
     for (int i = 2; i <= lua_gettop(L); i++) {
         if (!lua_isstring(L, i)) {
             free(basePath);
@@ -271,16 +323,17 @@ int fs_combine(lua_State *L) {
         const char * str = lua_tostring(L, i);
         char* ns = heap_caps_malloc(strlen(basePath)+strlen(str)+3, MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM);
         strcpy(ns, basePath);
-        if (basePath[strlen(basePath)-1] == '/' && str[0] == '/') strcat(ns, str + 1);
+        if (strlen(basePath) > 0 && basePath[strlen(basePath)-1] == '/' && str[0] == '/') strcat(ns, str + 1);
         else {
-            if (basePath[strlen(basePath)-1] != '/' && str[0] != '/') strcat(ns, "/");
+            if (strlen(basePath) && basePath[strlen(basePath)-1] != '/' && str[0] != '/') strcat(ns, "/");
             strcat(ns, str);
         }
         free(basePath);
         basePath = ns;
     }
-    if (basePath[0] == '/') lua_pushstring(L, basePath + 1);
-    else lua_pushstring(L, basePath);
+    char* newPath = fixpath(basePath);
+    lua_pushstring(L, newPath + 1);
+    free(newPath);
     free(basePath);
     return 1;
 }
@@ -303,6 +356,9 @@ static int fs_open(lua_State *L) {
         free(path);
         return 2; 
     }
+    char* dir = unconst(path);
+    if (strcmp(dirname(dir), "") != 0) recurse_mkdir(dir);
+    free(dir);
     FILE ** fp = (FILE**)lua_newuserdata(L, sizeof(FILE*));
     int fpid = lua_gettop(L);
     *fp = fopen(path, mode);

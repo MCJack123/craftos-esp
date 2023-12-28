@@ -13,6 +13,7 @@
 #include "module/terminal.h"
 
 static const char * TAG = "main";
+static TaskHandle_t machineTask;
 
 extern void badapple_main(void);
 extern void machine_main(void*);
@@ -23,6 +24,10 @@ static void memory_timer(TimerHandle_t timer) {
         heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
         heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
     }
+}
+
+static void shutdown(void) {
+    if (xTaskGetCurrentTaskHandle() != machineTask) vTaskDelete(machineTask);
 }
 
 esp_err_t _app_main(void) {
@@ -45,7 +50,8 @@ esp_err_t _app_main(void) {
 
     ESP_LOGI(TAG, "Finished startup.");
 
-    xTaskCreatePinnedToCore(machine_main, "CraftOS", 16384, NULL, tskIDLE_PRIORITY, NULL, 1);
+    xTaskCreatePinnedToCore(machine_main, "CraftOS", 16384, NULL, tskIDLE_PRIORITY, &machineTask, 1);
+    esp_register_shutdown_handler(shutdown);
 
     return 0;
 }

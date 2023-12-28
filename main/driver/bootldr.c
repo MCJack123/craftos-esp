@@ -10,21 +10,28 @@
 
 static const char* const TAG = "bootldr";
 static time_t lastpress = 0;
+ESP_EVENT_DEFINE_BASE(BOOTLDR_EVENT);
+
+static void bootldr_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    esp_err_t err;
+    nvs_handle_t nvs;
+    err = nvs_open("bootldr", NVS_READWRITE, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Could not open bootloader state: %s (%d)", esp_err_to_name(err), err);
+        return;
+    }
+    nvs_set_u8(nvs, "status", 1);
+    nvs_commit(nvs);
+    nvs_close(nvs);
+    xTaskCreate(esp_restart, "restart", 4096, NULL, tskIDLE_PRIORITY, NULL);
+}
 
 static IRAM_ATTR void bootldr_button(void*) {
     time_t tm = time(NULL);
     if (lastpress - tm < 2) {
-        esp_err_t err;
-        nvs_handle_t nvs;
-        err = nvs_open("bootldr", NVS_READWRITE, &nvs);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Could not open bootloader state: %s (%d)", esp_err_to_name(err), err);
-            return;
-        }
-        nvs_set_u8(nvs, "status", 1);
-        nvs_commit(nvs);
-        nvs_close(nvs);
-        esp_restart();
+        BaseType_t unblocked;
+        esp_event_isr_post(BOOTLDR_EVENT, 0, NULL, 0, &unblocked);
+        if (unblocked == pdTRUE) portYIELD_FROM_ISR();
         return; // for safety
     }
     lastpress = tm;
@@ -64,6 +71,7 @@ esp_err_t bootldr_init(void) {
     gpio_set_direction(GPIO_NUM_0, GPIO_MODE_INPUT);
     gpio_set_intr_type(GPIO_NUM_0, GPIO_INTR_NEGEDGE);
     gpio_isr_handler_add(GPIO_NUM_0, bootldr_button, NULL);
+    esp_event_handler_register(BOOTLDR_EVENT, 0, bootldr_handler, NULL);
     esp_register_shutdown_handler(bootldr_deinit);
     return ESP_OK;
 }

@@ -8,7 +8,7 @@ dependencies:
   #leeebo/tinyusb_src: "~0.0.3"
   ## Required IDF version
   idf:
-    version: ">=4.1.0"
+    version: ">=5.0.0"
   # # Put list of dependencies here
   # # For components maintained by Espressif:
   # component: "~1.0.0"

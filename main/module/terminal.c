@@ -43,7 +43,7 @@ static void terminal_task(void*) {
                     line[x] = font_data[((c >> 4) * 9 + ((y % 18) >> 1)) * 96 + ((c & 0xF) * 6 + (x % 6))] ? palette[colors[cp] & 0x0F] : palette[colors[cp] >> 4];
                 }
                 int cx = cursorX;
-                if (cursorOn && y >> 1 == cursorY * 9 + 6 && cx >= 0 && cx < TERM_WIDTH) memset(line + cx * 6, palette[cursorColor], 6);
+                if (cursorOn && y >> 1 == cursorY * 9 + 7 && cx >= 0 && cx < TERM_WIDTH) memset(line + cx * 6, palette[cursorColor], 6);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(30));

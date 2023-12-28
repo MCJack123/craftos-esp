@@ -64,6 +64,18 @@ typedef union {
 #endif
         void* handle_arg;
     } http;
+    struct {
+        uint32_t type;
+        uint16_t channel;
+        uint16_t replyChannel;
+#ifdef lua_h
+        void (*message_fn)(lua_State*, void*);
+#else
+        void (*message_fn)(void*, void*);
+#endif
+        void* message_arg;
+        float distance;
+    } modem;
 } event_t;
 
 extern void event_push(const event_t* event);

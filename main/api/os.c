@@ -42,9 +42,9 @@ int os_setComputerLabel(lua_State *L) {
 
 int os_queueEvent(lua_State *L) {
     int count = lua_gettop(L);
-    const char * name = lua_tostring(L, 1);
+    luaL_checkstring(L, 1);
     lua_State *param = lua_newthread(paramQueue);
-    lua_xmove(L, param, count - 1);
+    lua_xmove(L, param, count);
     return 0;
 }
 

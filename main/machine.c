@@ -2,6 +2,7 @@
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
+#include <esp_random.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -72,7 +73,12 @@ static int getNextEvent(lua_State *L, const char * filter) {
                     lua_pushliteral(event, "left");
                     break;
                 case EVENT_TYPE_MODEM_MESSAGE:
+                    lua_checkstack(event, 10);
                     lua_pushliteral(event, "back");
+                    lua_pushinteger(event, ev.modem.channel);
+                    lua_pushinteger(event, ev.modem.replyChannel);
+                    ev.modem.message_fn(event, ev.modem.message_arg);
+                    lua_pushnumber(event, ev.modem.distance);
                     break;
                 case EVENT_TYPE_WIFI_SCAN:
                     if (ev.wifi.networks == NULL) lua_pushnil(event);
@@ -154,6 +160,7 @@ void machine_main(void*) {
     lua_pushnil(coro); lua_setglobal(coro, "package");
     lua_pushnil(coro); lua_setglobal(coro, "require");
     lua_pushnil(coro); lua_setglobal(coro, "io");
+    srand(esp_random());
     
     /* Load the file containing the script we are going to run */
     printf("Loading BIOS...\n");

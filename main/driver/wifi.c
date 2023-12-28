@@ -22,10 +22,17 @@ static const char* const TAG = "wifi";
 static esp_netif_t* netif;
 static SemaphoreHandle_t s_semph_get_ip_addrs = NULL;
 static int s_retry_num = 0;
+static bool should_retry = true;
 
 static void on_wifi_disconnect(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
+    if (!should_retry) {
+        event_t event;
+        event.type = EVENT_TYPE_WIFI_DISCONNECT;
+        event_push(&event);
+        return;
+    }
     s_retry_num++;
     if (s_retry_num > 5) {
         ESP_LOGI(TAG, "WiFi Connect failed %d times, stop reconnect.", s_retry_num);
@@ -142,6 +149,7 @@ esp_err_t wifi_connect(const char* ssid, const char* password, const char* usern
     memset(&conf, 0, sizeof(conf));
     strcpy((char*)conf.ssid, ssid);
     if (password) strcpy((char*)conf.password, password);
+    should_retry = true;
     conf.scan_method = WIFI_ALL_CHANNEL_SCAN;
     conf.bssid_set = 0;
     conf.failure_retry_cnt = 0;
@@ -159,5 +167,6 @@ esp_err_t wifi_connect(const char* ssid, const char* password, const char* usern
 }
 
 esp_err_t wifi_disconnect(void) {
+    should_retry = false;
     return esp_wifi_disconnect();
 }

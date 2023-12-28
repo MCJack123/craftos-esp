@@ -19,8 +19,10 @@ extern void machine_main(void*);
 
 static void memory_timer(TimerHandle_t timer) {
     ESP_DRAM_LOGD(TAG, "Memory info:");
-    heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
-    heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+    if (esp_log_default_level >= ESP_LOG_DEBUG) {
+        heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
+        heap_caps_print_heap_info(MALLOC_CAP_SPIRAM);
+    }
 }
 
 esp_err_t _app_main(void) {

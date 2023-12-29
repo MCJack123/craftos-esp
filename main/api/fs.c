@@ -16,7 +16,6 @@
 extern int tsort(lua_State *L);
 
 char* dirname(char* path) {
-	if (path[0] == '/') strcpy(path, &path[1]);
     char tch;
     if (strrchr(path, '/') != NULL) tch = '/';
     else if (strrchr(path, '\\') != NULL) tch = '\\';
@@ -82,17 +81,17 @@ int fs_list(lua_State *L) {
             lua_settable(L, -3);
         }
         closedir(d);
-        if (strcmp(path, "/") == 0) {
-            // apparently not needed anymore?
-            /*lua_pushinteger(L, i);
+        // apparently not needed anymore?
+        /*if (strcmp(path, "/") == 0) {
+            lua_pushinteger(L, i);
             lua_pushliteral(L, "rom");
-            lua_settable(L, -3);*/
+            lua_settable(L, -3);
             if (diskMounted) {
                 lua_pushinteger(L, i);
                 lua_pushliteral(L, "disk");
                 lua_settable(L, -3);
             }
-        }
+        }*/
     } else err(L, path, "Not a directory");
     free(path);
     lua_pushcfunction(L, tsort);
@@ -162,13 +161,28 @@ int fs_getSize(lua_State *L) {
     return 1;
 }
 
+size_t capacity_cache[2] = {0, 0}, free_space_cache[2] = {0, 0};
+
 int fs_getFreeSpace(lua_State *L) {
     char * path = fixpath(lua_tostring(L, 1));
     size_t cap, used;
     if (strncmp(path, "/rom", 4) == 0) cap = 0, used = 0;
-    else if (strncmp(path, "/disk", 5) == 0) esp_vfs_fat_info("/disk", &cap, &used);
-    else esp_littlefs_info("data", &cap, &used);
-    lua_pushinteger(L, used);
+    else if (strncmp(path, "/disk", 5) == 0) {
+        if (free_space_cache[0]) {used = free_space_cache[0]; cap = capacity_cache[0];}
+        else {
+            esp_vfs_fat_info("/disk", &cap, &used);
+            capacity_cache[0] = cap;
+            free_space_cache[0] = used;
+        }
+    } else {
+        if (free_space_cache[1]) {used = free_space_cache[1]; cap = capacity_cache[1];}
+        else {
+            esp_littlefs_info("data", &cap, &used);
+            capacity_cache[1] = cap;
+            free_space_cache[1] = used;
+        }
+    }
+    lua_pushinteger(L, cap - used);
     return 1;
 }
 
@@ -176,26 +190,45 @@ int fs_getCapacity(lua_State *L) {
     char * path = fixpath(lua_tostring(L, 1));
     size_t cap, used;
     if (strncmp(path, "/rom", 4) == 0) cap = 0, used = 0;
-    else if (strncmp(path, "/disk", 5) == 0) esp_vfs_fat_info("/disk", &cap, &used);
-    else esp_littlefs_info("data", &cap, &used);
+    else if (strncmp(path, "/disk", 5) == 0) {
+        if (capacity_cache[0]) cap = capacity_cache[0];
+        else {
+            esp_vfs_fat_info("/disk", &cap, &used);
+            capacity_cache[0] = cap;
+            free_space_cache[0] = used;
+        }
+    } else {
+        if (capacity_cache[1]) cap = capacity_cache[1];
+        else {
+            esp_littlefs_info("data", &cap, &used);
+            capacity_cache[1] = cap;
+            free_space_cache[1] = used;
+        }
+    }
     lua_pushinteger(L, cap);
     return 1;
 }
 
 int recurse_mkdir(const char * path) {
-    if (mkdir(path, 0777) != 0) {
-        if (errno == ENOENT && strcmp(path, "/") != 0) {
-            if (recurse_mkdir(dirname(unconst(path)))) return 1;
-            mkdir(path, 0777);
-        } else return 1;
+    char* d = unconst(path);
+    struct stat st;
+    dirname(d);
+    if (strcmp(path, "") != 0 && strcmp(d, "") != 0 && stat(d, &st) != 0) {
+        int err = recurse_mkdir(d);
+        if (err) {
+            free(d);
+            return err;
+        }
     }
-    return 0;
+    free(d);
+    return mkdir(path, 0777);
 }
 
 int fs_makeDir(lua_State *L) {
     char * path = fixpath(lua_tostring(L, 1));
     if (recurse_mkdir(path) != 0) err(L, path, strerror(errno));
     free(path);
+    free_space_cache[0] = free_space_cache[1] = 0;
     return 0;
 }
 
@@ -278,6 +311,7 @@ int fs_copy(lua_State *L) {
     }
     free(fromPath);
     free(toPath);
+    free_space_cache[0] = free_space_cache[1] = 0;
     return 0;
 }
 
@@ -310,6 +344,7 @@ int fs_delete(lua_State *L) {
     char * path = fixpath(lua_tostring(L, 1));
     if (aux_delete(path) != 0) err(L, path, strerror(errno));
     free(path);
+    free_space_cache[0] = free_space_cache[1] = 0;
     return 0;
 }
 
@@ -342,24 +377,26 @@ int fs_combine(lua_State *L) {
 static int fs_open(lua_State *L) {
     const char * mode = luaL_checkstring(L, 2);
     if ((mode[0] != 'r' && mode[0] != 'w' && mode[0] != 'a') || (mode[1] != 'b' && mode[1] != '\0')) luaL_error(L, "%s: Unsupported mode", mode);
-    const char * path = fixpath(luaL_checkstring(L, 1));
+    char * path = fixpath(luaL_checkstring(L, 1));
     struct stat st;
-    if (mode[0] == 'r' && stat(path, &st) != 0) {
+    int err = stat(path, &st);
+    if (err != 0 && mode[0] == 'r') {
         lua_pushnil(L);
         lua_pushfstring(L, "%s: No such file", path);
         free(path);
         return 2;
-    }
-    else if (S_ISDIR(st.st_mode)) { 
+    } else if (err == 0 && S_ISDIR(st.st_mode)) { 
         lua_pushnil(L);
         if (strcmp(mode, "r") == 0 || strcmp(mode, "rb") == 0) lua_pushfstring(L, "%s: No such file", path);
         else lua_pushfstring(L, "%s: Cannot write to directory", path);
         free(path);
         return 2; 
     }
-    char* dir = unconst(path);
-    if (strcmp(dirname(dir), "") != 0) recurse_mkdir(dir);
-    free(dir);
+    if (mode[0] == 'w' || mode[0] == 'a') {
+        char* dir = unconst(path);
+        if (strcmp(dirname(dir), "") != 0) recurse_mkdir(dir);
+        free(dir);
+    }
     FILE ** fp = (FILE**)lua_newuserdata(L, sizeof(FILE*));
     int fpid = lua_gettop(L);
     *fp = fopen(path, mode);
@@ -429,7 +466,8 @@ static int fs_open(lua_State *L) {
 
 int fs_getDir(lua_State *L) {
     char * path = unconst(lua_tostring(L, 1));
-    lua_pushstring(L, dirname(path));
+    dirname(path);
+    lua_pushstring(L, path[0] == '/' ? path + 1 : path);
     free(path);
     return 1;
 }
@@ -469,6 +507,7 @@ const luaL_Reg fs_lib[] = {
     {"getDrive", fs_getDrive},
     {"getSize", fs_getSize},
     {"getFreeSpace", fs_getFreeSpace},
+    {"getCapacity", fs_getCapacity},
     {"makeDir", fs_makeDir},
     {"move", fs_move},
     {"copy", fs_copy},

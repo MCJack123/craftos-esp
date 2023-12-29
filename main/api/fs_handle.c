@@ -7,11 +7,14 @@
 #include <esp_heap_caps.h>
 #include "fs_handle.h"
 
+extern size_t free_space_cache[2];
+
 int fs_handle_close(lua_State *L) {
     if (*(FILE**)lua_touserdata(L, lua_upvalueindex(1)) == NULL)
         return luaL_error(L, "attempt to use a closed file");
     fclose(*(FILE**)lua_touserdata(L, lua_upvalueindex(1)));
     *(FILE**)lua_touserdata(L, lua_upvalueindex(1)) = NULL;
+    free_space_cache[0] = free_space_cache[1] = 0;
     return 0;
 }
 
@@ -198,6 +201,7 @@ int fs_handle_flush(lua_State *L) {
     FILE * fp = *(FILE**)lua_touserdata(L, lua_upvalueindex(1));
     if (fp == NULL) luaL_error(L, "attempt to use a closed file");
     fflush(fp);
+    free_space_cache[0] = free_space_cache[1] = 0;
     return 0;
 }
 

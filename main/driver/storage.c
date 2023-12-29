@@ -14,6 +14,7 @@
 
 static const char * TAG = "storage";
 
+extern size_t capacity_cache[2], free_space_cache[2];
 bool diskMounted = false;
 static sdmmc_slot_config_t slot_config;
 static sdmmc_card_t* card;
@@ -66,6 +67,7 @@ static void IRAM_ATTR check_det(void *args) {
 }
 
 static void mount_event(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    capacity_cache[0] = free_space_cache[0] = 0;
     switch (event_id) {
         case SD_EVENT_MOUNT: scan_mounts(); return;
         case SD_EVENT_UNMOUNT:

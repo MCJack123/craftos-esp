@@ -21,11 +21,10 @@ A port of CraftOS-PC for ESP32-S3.
 - Audio out through speaker peripheral
   - Mono PWM audio output
   - May not be viable due to memory constraints
-- Modem communication over BTLE
-- OTA updates
+- Modem communication over 802.11 Wi-Fi
 
 ## Requirements
-- System: ESP32-S3 module with 16+ MB flash, 2+ MB PSRAM (32/8 ideal)
+- System: ESP32-S3 module with 16+ MB flash, 2+ MB PSRAM minimum (32/8 ideal)
 - VGA: VGA breakout port/connector and a resistor bridge for DACs (reference: 3x ~710 ohm + 6x ~1400 ohm)
 - SD: SD/microSD breakout/port with full SD pins (no SPI only boards)
 - Audio: 3.5mm jack, RC filter over PWM output recommended

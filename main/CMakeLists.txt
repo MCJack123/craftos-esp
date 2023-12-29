@@ -7,7 +7,7 @@ idf_component_register(SRCS
     "craftos2-lua/src/lundump.c" "craftos2-lua/src/lutf8lib.c" "craftos2-lua/src/lvm.c" "craftos2-lua/src/lzio.c" "llock.c"
     "api/fs_handle.c" "api/fs.c" "api/http.c" "api/os.c" "api/peripheral.c" "api/redstone.c" "api/term.c" "api/wifi.c"
     "driver/audio.c" "driver/bootldr.c" "driver/hid.c" "driver/storage.c" "driver/vga.c" "driver/wifi.c"
-    "module/redstone.c" "module/terminal.c"
+    "module/mmfs.c" "module/redstone.c" "module/terminal.c"
     "peripheral/drive.c" "peripheral/modem.c" "peripheral/speaker.c"
     "common.c" "event.c" "machine.c" "main.c"
     INCLUDE_DIRS "." "craftos2-lua/include")

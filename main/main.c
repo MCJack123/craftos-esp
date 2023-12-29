@@ -44,7 +44,7 @@ esp_err_t _app_main(void) {
     terminal_init();
 
     terminal_clear(-1, 0xF0);
-    terminal_write_literal(0, 0, "Starting CraftOS-ESP...", 0xF4);
+    //terminal_write_literal(0, 0, "Starting CraftOS-ESP...", 0xF4);
 
     xTimerStart(xTimerCreate("memory", pdMS_TO_TICKS(30000), true, &memory_timer, memory_timer), portMAX_DELAY);
 

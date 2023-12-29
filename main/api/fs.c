@@ -83,11 +83,12 @@ int fs_list(lua_State *L) {
         }
         closedir(d);
         if (strcmp(path, "/") == 0) {
-            lua_pushinteger(L, i);
+            // apparently not needed anymore?
+            /*lua_pushinteger(L, i);
             lua_pushliteral(L, "rom");
-            lua_settable(L, -3);
+            lua_settable(L, -3);*/
             if (diskMounted) {
-                lua_pushinteger(L, i + 1);
+                lua_pushinteger(L, i);
                 lua_pushliteral(L, "disk");
                 lua_settable(L, -3);
             }

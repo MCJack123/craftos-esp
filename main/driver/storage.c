@@ -10,6 +10,7 @@
 #include <driver/sdmmc_host.h>
 #include "../event.h"
 #include "storage.h"
+#include "../module/mmfs.h"
 
 static const char * TAG = "storage";
 
@@ -93,11 +94,12 @@ esp_err_t storage_init(void) {
     conf.read_only = false;
     CHECK_CALLE(esp_vfs_littlefs_register(&conf), "Failed to mount root filesystem");
     ESP_LOGV(TAG, "Mounting ROM partition");
-    conf.base_path = "/rom";
-    conf.partition_label = "rom";
-    conf.format_if_mount_failed = false;
-    conf.read_only = true;
-    CHECK_CALLE(esp_vfs_littlefs_register(&conf), "Failed to mount ROM filesystem");
+    mmfs_config_t mmfs_conf;
+    mmfs_conf.base_path = "/rom";
+    mmfs_conf.partition = "rom";
+    mmfs_conf.type = ESP_PARTITION_TYPE_ANY;
+    mmfs_conf.subtype = ESP_PARTITION_SUBTYPE_ANY;
+    CHECK_CALLE(mmfs_vfs_mount(&mmfs_conf), "Failed to mount ROM filesystem");
     // initialize SD card driver
     ESP_LOGV(TAG, "Initializing SD cards");
     slot_config.width = 4;
@@ -130,6 +132,6 @@ void storage_deinit(void) {
     gpio_isr_handler_remove(GPIO_NUM_4);
     if (diskMounted) esp_vfs_fat_sdcard_unmount("/disk", card);
     sdmmc_host_deinit();
-    esp_vfs_littlefs_unregister("rom");
+    mmfs_vfs_unmount("/rom");
     esp_vfs_littlefs_unregister("data");
 }

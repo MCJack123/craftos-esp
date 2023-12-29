@@ -465,13 +465,6 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
-# Example Board Configuration
-#
-# CONFIG_ESP_LYRAT_V4_3_BOARD is not set
-CONFIG_ESP_CUSTOM_BOARD=y
-# end of Example Board Configuration
-
-#
 # Compiler options
 #
 # CONFIG_COMPILER_OPTIMIZATION_DEFAULT is not set
@@ -1780,12 +1773,6 @@ CONFIG_WIFI_PROV_AUTOSTOP_TIMEOUT=30
 CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # CONFIG_WIFI_PROV_STA_FAST_SCAN is not set
 # end of Wi-Fi Provisioning Manager
-
-#
-# BTstack Configuration
-#
-CONFIG_BTSTACK_AUDIO=y
-# end of BTstack Configuration
 
 #
 # LittleFS

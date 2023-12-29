@@ -9,7 +9,7 @@
 #include "../module/terminal.h"
 
 unsigned short current_colors = 0xF0;
-int cursorX = 0, cursorY = 1;
+int cursorX = 0, cursorY = 0;
 int cursorBlink = 0;
 
 int term_write(lua_State *L) {

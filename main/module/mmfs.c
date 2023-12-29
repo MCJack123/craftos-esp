@@ -1,3 +1,10 @@
+/**
+ * Memory-Mapped Filesystem for ESP32
+ * A performance-oriented filesystem driver designed for read-only partitions.
+ * 
+ * Copyright (c) 2024 JackMacWindows. Licensed under the Apache 2.0 license.
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <esp_partition.h>
@@ -329,6 +336,11 @@ esp_err_t mmfs_vfs_mount(const mmfs_config_t* config) {
     mount->mmap = handle;
     mount->root = ptr;
     mount->base_path = malloc(strlen(config->base_path) + 1);
+    if (mount->base_path == NULL) {
+        free(mount);
+        esp_partition_munmap(handle);
+        return ESP_ERR_NO_MEM;
+    }
     strcpy(mount->base_path, config->base_path);
     for (int i = 0; i < MAX_FDS; i++)
         mount->fds[i].start = mount->fds[i].ptr = mount->fds[i].end = NULL;
@@ -338,6 +350,7 @@ esp_err_t mmfs_vfs_mount(const mmfs_config_t* config) {
     mounts = mount;
     err = esp_vfs_register(config->base_path, &mmfs_vfs, mount);
     if (err != ESP_OK) {
+        free(mount->base_path);
         free(mount);
         esp_partition_munmap(handle);
         return err;
